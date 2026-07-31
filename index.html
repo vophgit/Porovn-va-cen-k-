@@ -54,7 +54,7 @@
     opacity:0.6;
     pointer-events:none;
   }
-  .app-inner{position:relative; max-width:1120px; margin:0 auto;}
+  .app-inner{position:relative; max-width:1440px; margin:0 auto;}
   .eyebrow{
     display:inline-flex; align-items:center; gap:8px;
     font-family:'IBM Plex Mono', monospace;
@@ -67,7 +67,7 @@
   header.app h1{font-size:30px; font-weight:700; color:#fff;}
   header.app p{margin:10px 0 0; color:#FFE6CC; font-size:14.5px; max-width:640px; line-height:1.55;}
 
-  main{max-width:1120px; margin:0 auto; padding:30px 28px 80px;}
+  main{max-width:1440px; margin:0 auto; padding:30px 28px 80px;}
 
   .step{
     background:var(--panel);
@@ -203,23 +203,24 @@
 
   table{width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
   thead th{
-    background:var(--accent); color:#fff; text-align:left; padding:10px 12px; font-size:11px;
+    background:var(--accent); color:#fff; text-align:left; padding:14px 16px; font-size:12.5px;
     text-transform:uppercase; letter-spacing:0.05em; font-weight:600; position:sticky; top:0;
   }
   thead th.sortable-th{cursor:pointer; user-select:none; transition:background .12s;}
   thead th.sortable-th:hover{background:var(--accent-dark);}
-  .sort-arrow{font-size:9px; margin-left:3px; opacity:0.9;}
-  tbody td{padding:9px 12px; border-top:1px solid var(--line); font-size:13px; vertical-align:middle;}
-  tbody tr:hover{background:#FAFAF7;}
-  td.ean{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft);}
-  th.ean{font-family:'IBM Plex Mono', monospace; font-size:11px;}
-  td.price{font-family:'IBM Plex Mono', monospace; text-align:right;}
-  .price-cell.best{background:var(--good-bg); color:var(--good); font-weight:600; border-radius:5px;}
-  .tag{display:inline-block; font-size:10.5px; padding:2px 7px; border-radius:20px; font-family:'IBM Plex Mono',monospace;}
+  .sort-arrow{font-size:10px; margin-left:3px; opacity:0.9;}
+  tbody td{padding:13px 16px; border-top:1px solid var(--line); font-size:14.5px; vertical-align:middle;}
+  tbody tr:hover{background:#FFF8EF;}
+  td.ean{font-family:'IBM Plex Mono', monospace; font-size:12.5px; color:var(--ink-soft);}
+  th.ean{font-family:'IBM Plex Mono', monospace; font-size:12px;}
+  td.price{font-family:'IBM Plex Mono', monospace; text-align:right; font-size:14px;}
+  .price-cell.best{background:var(--good-bg); color:var(--good); font-weight:700; border-radius:5px;}
+  .tag{display:inline-block; font-size:11px; padding:3px 9px; border-radius:20px; font-family:'IBM Plex Mono',monospace;}
   .tag.only{background:var(--bad-bg); color:var(--bad-ink);}
   .tag.matched{background:var(--good-bg); color:var(--good);}
+  .tag.count{background:var(--accent-soft); color:var(--accent-dark); font-weight:600;}
 
-  .table-wrap{max-height:560px; overflow:auto; border-radius:var(--radius);}
+  .table-wrap{max-height:calc(100vh - 160px); min-height:420px; overflow:auto; border-radius:var(--radius);}
 
   .empty{text-align:center; color:var(--ink-soft); padding:50px 20px; font-size:13.5px;}
   .hint{color:var(--ink-soft); font-size:12px; margin-top:10px; line-height:1.5;}
@@ -304,7 +305,7 @@
       <label style="display:block; font-family:'Space Grotesk',sans-serif; font-size:18px; font-weight:700; color:var(--ink); margin-bottom:4px;">
         Přehled ceníků ve složce
       </label>
-      <p class="hint" style="margin-bottom:14px;">Zaškrtni přesně dva, které chceš porovnat — první zaškrtnutý bude „Dodavatel A", druhý „Dodavatel B".</p>
+      <p class="hint" style="margin-bottom:14px;">Zaškrtni ceníky, které chceš porovnat (klidně víc než dva) — appka je porovná všechny najednou podle EAN.</p>
       <div id="drive-files-list"></div>
       <div style="margin-top:14px;">
         <button class="btn-accent" id="btn-drive-use" disabled>Použít vybrané ceníky</button>
@@ -388,12 +389,14 @@
       <input type="text" id="search" placeholder="Hledat podle názvu nebo EAN…">
       <select id="filter-select">
         <option value="all">Zobrazit vše</option>
-        <option value="matched" selected>Jen spárované</option>
-        <option value="onlyA">Jen dodavatel A</option>
-        <option value="onlyB">Jen dodavatel B</option>
+        <option value="multi" selected>Ve více cenících</option>
+        <option value="single">Jen v jednom ceníku</option>
       </select>
       <select id="brand-select">
         <option value="all">Všechny značky</option>
+      </select>
+      <select id="supplier-select-filter">
+        <option value="all">Kterýkoliv dodavatel</option>
       </select>
       <button class="btn-ghost" id="btn-export">Stáhnout porovnání (Excel)</button>
     </div>
@@ -432,12 +435,12 @@ const GOOGLE_CLIENT_ID = '';
 const GOOGLE_DRIVE_FOLDER_DEFAULT = 'https://drive.google.com/drive/u/3/folders/1sJb8mwrcLlh_agPISxU_msVUY53gDOUC';
 
 const state = {
-  a: { file:null, workbook:null, sheets:{}, name:'Dodavatel A', date:'' },
-  b: { file:null, workbook:null, sheets:{}, name:'Dodavatel B', date:'' },
-  results: null,
-  orders: new Map(), // ean -> { qty:number, supplier:'A'|'B' }
+  suppliers: [], // array of { file, workbook, sheets, name, date }
+  results: null, // { products: [{ean,name,brand,offers:[{supplierIdx,price,pallet,carton}]}] }
+  orders: new Map(), // ean -> { qty:number, supplierIdx:number }
   sort: { key:null, dir:'asc' },
-  drive: { tokenClient:null, accessToken:null, files:[], selected:[] } // selected: ordered array of fileIds (max 2)
+  drive: { tokenClient:null, accessToken:null, files:[], selected:[] }, // selected: ordered array of fileIds, any length
+  importFileEans: []
 };
 
 function normEan(v){
@@ -569,19 +572,17 @@ function analyzeSheet(rows){
   return { headerRowIndex: bestRow, header, eanCol, nameCol, priceCol, palletCol, cartonCol, brandCol, rows };
 }
 
-function applyWorkbookToState(targetKey, wb, displayName, fileRef){
-  state[targetKey].file = fileRef;
-  state[targetKey].workbook = wb;
-  state[targetKey].sheets = {};
+function addSupplierFromWorkbook(wb, displayName, fileRef){
+  const supplier = { file:fileRef, workbook:wb, sheets:{}, name:'', date:'' };
   wb.SheetNames.forEach(sn=>{
     const ws = wb.Sheets[sn];
     const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
     if(!rows.length) return;
     const analysis = analyzeSheet(rows);
-    state[targetKey].sheets[sn] = Object.assign({included:true}, analysis);
+    supplier.sheets[sn] = Object.assign({included:true}, analysis);
   });
-  state[targetKey].name = guessSupplierName(displayName) || labelFor(targetKey);
-  renderMapping();
+  supplier.name = guessSupplierName(displayName) || `Dodavatel ${state.suppliers.length+1}`;
+  state.suppliers.push(supplier);
 }
 
 // ============================================================
@@ -695,7 +696,7 @@ function renderDriveFiles(){
   const list = document.getElementById('drive-files-list');
   list.innerHTML = state.drive.files.map(f=>{
     const checked = state.drive.selected.includes(f.id);
-    const position = state.drive.selected.indexOf(f.id); // 0 -> Dodavatel A, 1 -> Dodavatel B
+    const position = state.drive.selected.indexOf(f.id);
     const guessed = guessSupplierName(f.name);
     const modified = f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('cs-CZ') : '';
     const sizeKb = f.size ? Math.round(f.size/1024) + ' kB' : '';
@@ -705,7 +706,7 @@ function renderDriveFiles(){
         <div class="dfname">${escapeHtml(guessed)}</div>
         <div class="dfmeta">${escapeHtml(f.name)} · upraveno ${modified}${sizeKb ? ' · '+sizeKb : ''}</div>
       </div>
-      <span class="dfbadge">${position === 0 ? 'Dodavatel A' : position === 1 ? 'Dodavatel B' : ''}</span>
+      <span class="dfbadge">${checked ? '#'+(position+1)+' vybráno' : ''}</span>
     </label>`;
   }).join('');
 
@@ -713,18 +714,12 @@ function renderDriveFiles(){
     cb.addEventListener('change', ()=>{
       const id = cb.getAttribute('data-drive-file');
       if(cb.checked){
-        if(state.drive.selected.length >= 2){
-          cb.checked = false;
-          document.getElementById('drive-list-status').textContent = 'Můžeš vybrat maximálně dva ceníky najednou (fáze 1 — porovnání dvou dodavatelů). Nejdřív jeden odškrtni.';
-          document.getElementById('drive-list-status').style.color = '#B23A2E';
-          return;
-        }
         state.drive.selected.push(id);
       } else {
         state.drive.selected = state.drive.selected.filter(x=>x!==id);
       }
       renderDriveFiles();
-      document.getElementById('btn-drive-use').disabled = state.drive.selected.length !== 2;
+      document.getElementById('btn-drive-use').disabled = state.drive.selected.length < 2;
     });
   });
 }
@@ -744,20 +739,20 @@ async function driveDownloadAsWorkbook(file){
 document.getElementById('btn-drive-use').addEventListener('click', async ()=>{
   const btn = document.getElementById('btn-drive-use');
   const statusEl = document.getElementById('drive-list-status');
-  if(state.drive.selected.length !== 2) return;
+  if(state.drive.selected.length < 2) return;
   btn.disabled = true;
   statusEl.style.color = '';
   try{
-    const [idA, idB] = state.drive.selected;
-    const fileA = state.drive.files.find(f=>f.id===idA);
-    const fileB = state.drive.files.find(f=>f.id===idB);
-    statusEl.textContent = `Stahuji „${fileA.name}"…`;
-    const wbA = await driveDownloadAsWorkbook(fileA);
-    applyWorkbookToState('a', wbA, fileA.name, {driveId:fileA.id, name:fileA.name});
-    statusEl.textContent = `Stahuji „${fileB.name}"…`;
-    const wbB = await driveDownloadAsWorkbook(fileB);
-    applyWorkbookToState('b', wbB, fileB.name, {driveId:fileB.id, name:fileB.name});
-    statusEl.textContent = 'Oba ceníky načteny z Disku — zkontroluj mapování sloupců níže.';
+    state.suppliers = [];
+    for(const id of state.drive.selected){
+      const file = state.drive.files.find(f=>f.id===id);
+      if(!file) continue;
+      statusEl.textContent = `Stahuji „${file.name}"…`;
+      const wb = await driveDownloadAsWorkbook(file);
+      addSupplierFromWorkbook(wb, file.name, {driveId:file.id, name:file.name});
+    }
+    statusEl.textContent = `Načteno ${state.suppliers.length} ceníků z Disku — zkontroluj mapování sloupců níže.`;
+    renderMapping();
   } catch(err){
     statusEl.textContent = err.message;
     statusEl.style.color = '#B23A2E';
@@ -766,19 +761,25 @@ document.getElementById('btn-drive-use').addEventListener('click', async ()=>{
   }
 });
 
+// ============================================================
+// Mapování sloupců
+// ============================================================
+
+function labelFor(key){ return `Dodavatel ${parseInt(key,10)+1}`; }
+
 function renderMapping(){
   const section = document.getElementById('mapping-section');
   const grid = document.getElementById('mapping-grid');
-  if(!state.a.workbook && !state.b.workbook){ section.classList.add('hidden'); return; }
+  if(!state.suppliers.length){ section.classList.add('hidden'); return; }
   section.classList.remove('hidden');
   grid.innerHTML = '';
-  ['a','b'].forEach(key=>{
-    const st = state[key];
-    if(!st.workbook) return;
+
+  state.suppliers.forEach((st, idx)=>{
+    const key = String(idx);
     const card = document.createElement('div');
     card.className = 'file-card';
-    let html = `<div class="fname"><span>${labelFor(key)} · <span class="mono">${st.file.name}</span></span>
-      <span class="clear" data-clear="${key}">vymazat</span></div>`;
+    let html = `<div class="fname"><span>${labelFor(key)} · <span class="mono">${escapeHtml(st.file.name)}</span></span>
+      <span class="clear" data-clear="${key}">odebrat</span></div>`;
 
     html += `<div class="field-row"><label>Název dodavatele (zobrazí se v tabulce)</label>
       <input type="text" data-name-input="${key}" value="${escapeHtml(st.name)}"></div>`;
@@ -808,10 +809,8 @@ function renderMapping(){
     grid.appendChild(card);
   });
 
-  // wire up selects to preselected values
-  ['a','b'].forEach(key=>{
-    const st = state[key];
-    if(!st.workbook) return;
+  state.suppliers.forEach((st, idx)=>{
+    const key = String(idx);
     Object.keys(st.sheets).forEach(sn=>{
       const sheet = st.sheets[sn];
       grid.querySelector(`select[data-col="${key}|${sn}|ean"]`).value = sheet.eanCol;
@@ -825,28 +824,34 @@ function renderMapping(){
 
   grid.querySelectorAll('[data-clear]').forEach(el=>{
     el.addEventListener('click', ()=>{
-      const key = el.getAttribute('data-clear');
-      state[key] = { file:null, workbook:null, sheets:{}, name: labelFor(key), date:'' };
+      const idx = parseInt(el.getAttribute('data-clear'), 10);
+      state.suppliers.splice(idx, 1);
       renderMapping();
       updateCompareButton();
     });
   });
   grid.querySelectorAll('[data-name-input]').forEach(el=>{
-    el.addEventListener('input', ()=>{ state[el.getAttribute('data-name-input')].name = el.value || labelFor(el.getAttribute('data-name-input')); });
+    el.addEventListener('input', ()=>{
+      const idx = parseInt(el.getAttribute('data-name-input'), 10);
+      state.suppliers[idx].name = el.value || labelFor(String(idx));
+    });
   });
   grid.querySelectorAll('[data-date-input]').forEach(el=>{
-    el.addEventListener('input', ()=>{ state[el.getAttribute('data-date-input')].date = el.value; });
+    el.addEventListener('input', ()=>{
+      const idx = parseInt(el.getAttribute('data-date-input'), 10);
+      state.suppliers[idx].date = el.value;
+    });
   });
   grid.querySelectorAll('[data-sheet-toggle]').forEach(el=>{
     el.addEventListener('change', ()=>{
       const [key, sn] = el.getAttribute('data-sheet-toggle').split('|');
-      state[key].sheets[sn].included = el.checked;
+      state.suppliers[parseInt(key,10)].sheets[sn].included = el.checked;
     });
   });
   grid.querySelectorAll('select[data-col]').forEach(el=>{
     el.addEventListener('change', ()=>{
       const [key, sn, field] = el.getAttribute('data-col').split('|');
-      state[key].sheets[sn][field+'Col'] = parseInt(el.value,10);
+      state.suppliers[parseInt(key,10)].sheets[sn][field+'Col'] = parseInt(el.value,10);
     });
   });
 
@@ -854,11 +859,8 @@ function renderMapping(){
   updateCompareButton();
 }
 
-function labelFor(key){ return key==='a' ? 'Dodavatel A' : 'Dodavatel B'; }
-
 function updateCompareButton(){
-  const btn = document.getElementById('btn-compare');
-  btn.disabled = !(state.a.workbook && state.b.workbook);
+  document.getElementById('btn-compare').disabled = state.suppliers.length < 2;
 }
 
 function deriveBrandFromName(name){
@@ -882,7 +884,6 @@ function extractProducts(st){
       const ean = normEan(eanRaw);
       const name = (nameRaw===null||nameRaw===undefined) ? '' : String(nameRaw).trim();
 
-      // Divider/section row (e.g. "CIF", "DOMESTOS") marks the brand for rows that follow
       if(sheet.brandCol >= 0 && !ean && !name){
         const bv = row[sheet.brandCol];
         if(bv !== null && bv !== undefined && String(bv).trim() !== ''){
@@ -890,7 +891,7 @@ function extractProducts(st){
         }
       }
 
-      if(!ean || !name) continue; // skip category/divider/empty rows
+      if(!ean || !name) continue;
       let price = priceRaw;
       if(typeof price === 'string') price = parseFloat(price.replace(',','.').replace(/[^\d.\-]/g,''));
       if(typeof price !== 'number' || isNaN(price)) continue;
@@ -922,39 +923,34 @@ function extractProducts(st){
   return {products, dupCount};
 }
 
+// ============================================================
+// Porovnání N ceníků podle EAN
+// ============================================================
+
 document.getElementById('btn-compare').addEventListener('click', ()=>{
-  const A = extractProducts(state.a);
-  const B = extractProducts(state.b);
-  const bByEan = new Map(B.products.map(p=>[p.ean,p]));
-  const usedB = new Set();
+  const perSupplier = state.suppliers.map(st => extractProducts(st));
+  const productMap = new Map();
 
-  const matched = [];
-  const onlyA = [];
-  A.products.forEach(pa=>{
-    const pb = bByEan.get(pa.ean);
-    if(pb){
-      usedB.add(pa.ean);
-      const cheaper = pa.price <= pb.price ? 'A' : 'B';
-      matched.push({
-        ean: pa.ean,
-        name: pa.name,
-        priceA: pa.price,
-        priceB: pb.price,
-        palletA: pa.pallet,
-        palletB: pb.pallet,
-        cartonA: pa.carton,
-        cartonB: pb.carton,
-        brand: pa.brand || pb.brand || '',
-        cheaper,
-        diff: Math.abs(pa.price - pb.price)
-      });
-    } else {
-      onlyA.push(pa);
-    }
+  perSupplier.forEach((res, idx)=>{
+    res.products.forEach(p=>{
+      let entry = productMap.get(p.ean);
+      if(!entry){
+        entry = { ean:p.ean, name:p.name, brand:p.brand, offers:[] };
+        productMap.set(p.ean, entry);
+      }
+      if(!entry.brand && p.brand) entry.brand = p.brand;
+      entry.offers.push({ supplierIdx: idx, price:p.price, pallet:p.pallet, carton:p.carton });
+    });
   });
-  const onlyB = B.products.filter(p=>!usedB.has(p.ean));
 
-  state.results = { matched, onlyA, onlyB, totalA:A.products.length, totalB:B.products.length, dupA:A.dupCount, dupB:B.dupCount };
+  const products = Array.from(productMap.values());
+  products.forEach(pr => pr.offers.sort((a,b)=>a.price-b.price));
+
+  state.results = {
+    products,
+    perSupplierCounts: perSupplier.map(r=>r.products.length),
+    perSupplierDup: perSupplier.map(r=>r.dupCount)
+  };
   state.orders = new Map();
   state.sort = { key:null, dir:'asc' };
   renderResults();
@@ -963,44 +959,58 @@ document.getElementById('btn-compare').addEventListener('click', ()=>{
 function fmtPrice(v){
   return v.toLocaleString('cs-CZ', {minimumFractionDigits:2, maximumFractionDigits:2});
 }
+function fmtPallet(v){
+  return (v===null || v===undefined || isNaN(v)) ? '—' : v.toLocaleString('cs-CZ');
+}
 
 const SORT_COLUMNS = [
-  {key:'ean', label:'EAN', type:'string', thClass:'ean'},
-  {key:'name', label:'Název produktu', type:'string'},
-  {key:'priceA', label:()=>`Cena ${escapeHtml(state.a.name)}`, type:'number', align:'right'},
-  {key:'priceB', label:()=>`Cena ${escapeHtml(state.b.name)}`, type:'number', align:'right'},
+  {key:'ean', label:'EAN', thClass:'ean'},
+  {key:'name', label:'Název produktu'},
+  {key:'minPrice', label:'Nejnižší cena', align:'right'},
+  {key:'supplierName', label:'Nejlevnější dodavatel'},
+  {key:'supplierCount', label:'Počet ceníků', align:'right'},
   {key:null, label:'Objednat u', sortable:false},
-  {key:'diff', label:'Rozdíl', type:'number', align:'right'},
-  {key:'carton', label:'Ks/karton', type:'number', align:'right'},
-  {key:'pallet', label:'Ks/paleta', type:'number', align:'right'},
-  {key:'qty', label:'Množství objednávky', type:'number', align:'right'},
+  {key:'diff', label:'Rozdíl', align:'right'},
+  {key:'carton', label:'Ks/karton', align:'right'},
+  {key:'pallet', label:'Ks/paleta', align:'right'},
+  {key:'qty', label:'Množství objednávky', align:'right'},
 ];
 
 function renderResults(){
   const res = state.results;
   document.getElementById('results-section').classList.remove('hidden');
 
-  const totalSavings = res.matched.reduce((sum,m)=>sum+m.diff,0);
+  const multiCount = res.products.filter(p=>p.offers.length>=2).length;
+  const singleCount = res.products.length - multiCount;
+  const totalSavings = res.products.reduce((sum,p)=>{
+    if(p.offers.length < 2) return sum;
+    return sum + (p.offers[p.offers.length-1].price - p.offers[0].price);
+  }, 0);
+
   const grid = document.getElementById('summary-grid');
   grid.innerHTML = `
-    <div class="stat good"><div class="num">${res.matched.length}</div><div class="lbl">Spárováno podle EAN</div></div>
-    <div class="stat"><div class="num">${res.onlyA.length}</div><div class="lbl">Jen u ${escapeHtml(state.a.name)}</div></div>
-    <div class="stat"><div class="num">${res.onlyB.length}</div><div class="lbl">Jen u ${escapeHtml(state.b.name)}</div></div>
-    <div class="stat"><div class="num">${fmtPrice(totalSavings)}</div><div class="lbl">Součet rozdílů (Kč) při volbě levnějšího</div></div>
+    <div class="stat good"><div class="num">${multiCount}</div><div class="lbl">Ve více cenících</div></div>
+    <div class="stat"><div class="num">${singleCount}</div><div class="lbl">Jen v jednom ceníku</div></div>
+    <div class="stat"><div class="num">${res.products.length}</div><div class="lbl">Produktů celkem</div></div>
+    <div class="stat"><div class="num">${fmtPrice(totalSavings)}</div><div class="lbl">Součet rozpětí cen (Kč) při volbě nejlevnějšího</div></div>
   `;
 
   renderThead();
 
   const brandSet = new Set();
-  res.matched.forEach(m=>{ if(m.brand) brandSet.add(m.brand); });
-  res.onlyA.forEach(p=>{ if(p.brand) brandSet.add(p.brand); });
-  res.onlyB.forEach(p=>{ if(p.brand) brandSet.add(p.brand); });
+  res.products.forEach(p=>{ if(p.brand) brandSet.add(p.brand); });
   const brandSelect = document.getElementById('brand-select');
   const prevBrand = brandSelect.value;
   const sortedBrands = Array.from(brandSet).sort((a,b)=>a.localeCompare(b,'cs'));
   brandSelect.innerHTML = `<option value="all">Všechny značky (${sortedBrands.length})</option>` +
     sortedBrands.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
   if(sortedBrands.includes(prevBrand)) brandSelect.value = prevBrand;
+
+  const supplierFilterSelect = document.getElementById('supplier-select-filter');
+  const prevSupplierFilter = supplierFilterSelect.value;
+  supplierFilterSelect.innerHTML = `<option value="all">Kterýkoliv dodavatel</option>` +
+    state.suppliers.map((s,i)=>`<option value="${i}">${escapeHtml(s.name)}</option>`).join('');
+  if(Array.from(supplierFilterSelect.options).some(o=>o.value===prevSupplierFilter)) supplierFilterSelect.value = prevSupplierFilter;
 
   renderTable();
 }
@@ -1036,51 +1046,42 @@ document.getElementById('thead-row').addEventListener('click', e=>{
   renderTable();
 });
 
-function getOrder(ean, defaultSupplier){
+function getOrder(ean, defaultSupplierIdx){
   if(!state.orders.has(ean)){
-    state.orders.set(ean, { qty:null, supplier: defaultSupplier });
+    state.orders.set(ean, { qty:null, supplierIdx: defaultSupplierIdx });
   }
   return state.orders.get(ean);
 }
 
-function fmtPallet(v){
-  return (v===null || v===undefined || isNaN(v)) ? '—' : v.toLocaleString('cs-CZ');
+function findProduct(ean){
+  return state.results ? state.results.products.find(p=>p.ean===ean) : null;
 }
 
-function buildRowDescriptors(res, filter){
+function buildRowDescriptors(res, filter, supplierFilter){
   const rows = [];
-  if(filter === 'all' || filter === 'matched'){
-    res.matched.forEach(m=>{
-      const order = getOrder(m.ean, m.cheaper);
-      rows.push({
-        rowType:'matched', ean:m.ean, name:m.name, brand:m.brand,
-        priceA:m.priceA, priceB:m.priceB, diff:m.diff,
-        carton: order.supplier==='A' ? m.cartonA : m.cartonB,
-        pallet: order.supplier==='A' ? m.palletA : m.palletB,
-        qty: order.qty, ref:m, order
-      });
+  res.products.forEach(pr=>{
+    if(filter === 'multi' && pr.offers.length < 2) return;
+    if(filter === 'single' && pr.offers.length !== 1) return;
+    if(supplierFilter !== 'all' && !pr.offers.some(o=>o.supplierIdx === parseInt(supplierFilter,10))) return;
+
+    const minOffer = pr.offers[0];
+    const order = getOrder(pr.ean, minOffer.supplierIdx);
+    let chosenOffer = pr.offers.find(o=>o.supplierIdx === order.supplierIdx);
+    if(!chosenOffer){ chosenOffer = minOffer; order.supplierIdx = minOffer.supplierIdx; }
+
+    const supplierObj = state.suppliers[minOffer.supplierIdx];
+    rows.push({
+      ean: pr.ean, name: pr.name, brand: pr.brand,
+      minPrice: minOffer.price,
+      supplierName: supplierObj ? supplierObj.name : '',
+      supplierCount: pr.offers.length,
+      diff: chosenOffer.price - minOffer.price,
+      carton: chosenOffer.carton,
+      pallet: chosenOffer.pallet,
+      qty: order.qty,
+      offers: pr.offers, order, ref: pr
     });
-  }
-  if(filter === 'all' || filter === 'onlyA'){
-    res.onlyA.forEach(p=>{
-      const order = getOrder(p.ean, 'A');
-      rows.push({
-        rowType:'onlyA', ean:p.ean, name:p.name, brand:p.brand,
-        priceA:p.price, priceB:null, diff:null,
-        carton:p.carton, pallet:p.pallet, qty:order.qty, ref:p, order
-      });
-    });
-  }
-  if(filter === 'all' || filter === 'onlyB'){
-    res.onlyB.forEach(p=>{
-      const order = getOrder(p.ean, 'B');
-      rows.push({
-        rowType:'onlyB', ean:p.ean, name:p.name, brand:p.brand,
-        priceA:null, priceB:p.price, diff:null,
-        carton:p.carton, pallet:p.pallet, qty:order.qty, ref:p, order
-      });
-    });
-  }
+  });
   return rows;
 }
 
@@ -1089,7 +1090,7 @@ function compareRows(a, b, key, dir){
   const aEmpty = (va===null||va===undefined||va==='');
   const bEmpty = (vb===null||vb===undefined||vb==='');
   if(aEmpty && bEmpty) return 0;
-  if(aEmpty) return 1;  // rows without a value always sink to the bottom
+  if(aEmpty) return 1;
   if(bEmpty) return -1;
   let cmp;
   if(typeof va === 'string' || typeof vb === 'string'){
@@ -1100,38 +1101,29 @@ function compareRows(a, b, key, dir){
   return dir === 'asc' ? cmp : -cmp;
 }
 
+function supplierLabel(idx){
+  const s = state.suppliers[idx];
+  return s ? s.name : `Dodavatel ${idx+1}`;
+}
+
 function renderRowHtml(row){
-  const m = row.ref, order = row.order;
-  if(row.rowType === 'matched'){
-    return `<tr>
-      <td class="ean">${m.ean}</td>
-      <td>${escapeHtml(m.name)}</td>
-      <td class="price ${m.cheaper==='A' ? 'price-cell best':''}">${fmtPrice(m.priceA)}</td>
-      <td class="price ${m.cheaper==='B' ? 'price-cell best':''}">${fmtPrice(m.priceB)}</td>
-      <td>
-        <select class="supplier-select" data-supplier-select="${m.ean}">
-          <option value="A" ${order.supplier==='A'?'selected':''}>${escapeHtml(state.a.name)} (${fmtPrice(m.priceA)})</option>
-          <option value="B" ${order.supplier==='B'?'selected':''}>${escapeHtml(state.b.name)} (${fmtPrice(m.priceB)})</option>
-        </select>
-      </td>
-      <td class="price">${fmtPrice(m.diff)}</td>
-      <td class="pallet-col">${fmtPallet(row.carton)}</td>
-      <td class="pallet-col">${fmtPallet(row.pallet)}</td>
-      <td class="qty-cell"><input type="number" min="0" step="1" data-qty="${m.ean}" value="${order.qty ?? ''}" placeholder="0"></td>
-    </tr>`;
-  }
-  const isA = row.rowType === 'onlyA';
-  const supplierName = isA ? state.a.name : state.b.name;
+  const order = row.order;
+  const offersHtml = row.offers.map(o=>{
+    return `<option value="${o.supplierIdx}" ${order.supplierIdx===o.supplierIdx?'selected':''}>${escapeHtml(supplierLabel(o.supplierIdx))} (${fmtPrice(o.price)})</option>`;
+  }).join('');
   return `<tr>
-    <td class="ean">${m.ean}</td>
-    <td>${escapeHtml(m.name)}</td>
-    <td class="price">${isA ? fmtPrice(m.price) : '—'}</td>
-    <td class="price">${isA ? '—' : fmtPrice(m.price)}</td>
-    <td><span class="tag only">jen ${escapeHtml(supplierName)}</span></td>
-    <td class="price">—</td>
-    <td class="pallet-col">${fmtPallet(m.carton)}</td>
-    <td class="pallet-col">${fmtPallet(m.pallet)}</td>
-    <td class="qty-cell"><input type="number" min="0" step="1" data-qty="${m.ean}" value="${order.qty ?? ''}" placeholder="0"></td>
+    <td class="ean">${row.ean}</td>
+    <td>${escapeHtml(row.name)}</td>
+    <td class="price price-cell best">${fmtPrice(row.minPrice)}</td>
+    <td>${escapeHtml(row.supplierName)}</td>
+    <td class="price"><span class="tag count">${row.supplierCount}×</span></td>
+    <td>
+      <select class="supplier-select" data-supplier-select="${row.ean}">${offersHtml}</select>
+    </td>
+    <td class="price">${fmtPrice(row.diff)}</td>
+    <td class="pallet-col">${fmtPallet(row.carton)}</td>
+    <td class="pallet-col">${fmtPallet(row.pallet)}</td>
+    <td class="qty-cell"><input type="number" min="0" step="1" data-qty="${row.ean}" value="${order.qty ?? ''}" placeholder="0"></td>
   </tr>`;
 }
 
@@ -1141,9 +1133,10 @@ function renderTable(){
   const search = document.getElementById('search').value.trim().toLowerCase();
   const filter = document.getElementById('filter-select').value;
   const brandFilter = document.getElementById('brand-select').value;
+  const supplierFilter = document.getElementById('supplier-select-filter').value;
   const body = document.getElementById('results-body');
 
-  let rows = buildRowDescriptors(res, filter);
+  let rows = buildRowDescriptors(res, filter, supplierFilter);
 
   if(search){
     rows = rows.filter(r => r.name.toLowerCase().includes(search) || r.ean.includes(search));
@@ -1157,16 +1150,15 @@ function renderTable(){
 
   body.innerHTML = rows.length
     ? rows.map(renderRowHtml).join('')
-    : `<tr><td colspan="9"><div class="empty">Žádné položky neodpovídají filtru.</div></td></tr>`;
+    : `<tr><td colspan="10"><div class="empty">Žádné položky neodpovídají filtru.</div></td></tr>`;
   updateOrderSummary();
 }
 
-// Event delegation: quantities & supplier choice persist in state.orders across re-renders
 document.getElementById('results-body').addEventListener('input', e=>{
   const t = e.target;
   if(t.matches('input[data-qty]')){
     const ean = t.getAttribute('data-qty');
-    const order = state.orders.get(ean) || {qty:null, supplier:'A'};
+    const order = state.orders.get(ean) || {qty:null, supplierIdx:0};
     const v = t.value === '' ? null : Math.max(0, parseInt(t.value, 10) || 0);
     order.qty = v;
     state.orders.set(ean, order);
@@ -1177,84 +1169,26 @@ document.getElementById('results-body').addEventListener('change', e=>{
   const t = e.target;
   if(t.matches('select[data-supplier-select]')){
     const ean = t.getAttribute('data-supplier-select');
-    const order = state.orders.get(ean) || {qty:null, supplier:'A'};
-    order.supplier = t.value;
+    const order = state.orders.get(ean) || {qty:null, supplierIdx:0};
+    order.supplierIdx = parseInt(t.value, 10);
     state.orders.set(ean, order);
-    renderTable(); // pallet count depends on chosen supplier
+    renderTable();
   }
 });
-
-function priceForOrder(ean){
-  const res = state.results;
-  const m = res.matched.find(x=>x.ean===ean);
-  if(m){
-    const order = state.orders.get(ean);
-    return order && order.supplier === 'B' ? m.priceB : m.priceA;
-  }
-  const pa = res.onlyA.find(x=>x.ean===ean);
-  if(pa) return pa.price;
-  const pb = res.onlyB.find(x=>x.ean===ean);
-  if(pb) return pb.price;
-  return null;
-}
-
-function nameForOrder(ean){
-  const res = state.results;
-  const item = res.matched.find(x=>x.ean===ean) || res.onlyA.find(x=>x.ean===ean) || res.onlyB.find(x=>x.ean===ean);
-  return item ? item.name : '';
-}
-
-function supplierNameForOrder(ean){
-  const res = state.results;
-  if(res.matched.find(x=>x.ean===ean)){
-    const order = state.orders.get(ean);
-    return order && order.supplier === 'B' ? state.b.name : state.a.name;
-  }
-  if(res.onlyA.find(x=>x.ean===ean)) return state.a.name;
-  if(res.onlyB.find(x=>x.ean===ean)) return state.b.name;
-  return '';
-}
-
-function palletForOrder(ean){
-  const res = state.results;
-  const m = res.matched.find(x=>x.ean===ean);
-  if(m){
-    const order = state.orders.get(ean);
-    return (order && order.supplier === 'B') ? m.palletB : m.palletA;
-  }
-  const pa = res.onlyA.find(x=>x.ean===ean);
-  if(pa) return pa.pallet;
-  const pb = res.onlyB.find(x=>x.ean===ean);
-  if(pb) return pb.pallet;
-  return null;
-}
-
-function altPriceForOrder(ean){
-  // price at the OTHER supplier for the same EAN, if one exists (only matched products have an alternative)
-  const res = state.results;
-  const m = res.matched.find(x=>x.ean===ean);
-  if(!m) return null;
-  const order = state.orders.get(ean);
-  return (order && order.supplier === 'B') ? m.priceA : m.priceB;
-}
 
 function getOrderLines(){
   const lines = [];
   state.orders.forEach((order, ean)=>{
     if(order.qty && order.qty > 0){
-      const price = priceForOrder(ean);
-      if(price === null) return;
-      const pallet = palletForOrder(ean);
-      const altPrice = altPriceForOrder(ean);
+      const p = findProduct(ean);
+      if(!p || !p.offers.length) return;
+      const offer = p.offers.find(o=>o.supplierIdx===order.supplierIdx) || p.offers[0];
+      const maxOffer = p.offers[p.offers.length-1];
       lines.push({
-        ean,
-        name: nameForOrder(ean),
-        supplier: supplierNameForOrder(ean),
-        qty: order.qty,
-        price,
-        total: order.qty * price,
-        pallet,
-        altTotal: order.qty * (altPrice !== null ? altPrice : price) // if no alternative exists, treat as equal (no saving/loss)
+        ean, name: p.name, supplier: supplierLabel(offer.supplierIdx),
+        qty: order.qty, price: offer.price, total: order.qty*offer.price,
+        pallet: offer.pallet,
+        altTotal: order.qty * maxOffer.price // worst-case price among all offers for this product
       });
     }
   });
@@ -1277,7 +1211,7 @@ function updateOrderSummary(){
     }
   });
 
-  const savingsValue = totalAltValue - totalValue; // positive = cheaper than the other supplier
+  const savingsValue = totalAltValue - totalValue;
   const savingsPercent = totalAltValue > 0 ? (savingsValue / totalAltValue * 100) : 0;
 
   document.getElementById('op-count').textContent = lines.length;
@@ -1286,14 +1220,14 @@ function updateOrderSummary(){
   document.getElementById('op-value').textContent = fmtPrice(totalValue) + ' Kč';
 
   const savingsEl = document.getElementById('op-savings');
-  const sign = savingsValue >= 0 ? '−' : '+'; // "−X %" saved, "+X %" more expensive than the alternative
+  const sign = savingsValue >= 0 ? '−' : '+';
   savingsEl.textContent = `${sign}${fmtPrice(Math.abs(savingsPercent))} %`;
   savingsEl.style.color = savingsValue >= 0 ? '' : '#B23A2E';
 
   const note = document.getElementById('op-note');
   const notes = [];
   if(missingPallet > 0) notes.push(`${missingPallet} položek nemá známý počet ks/paleta, do počtu palet se nezapočítávají.`);
-  notes.push(`Úspora je počítána oproti ceně stejného produktu u druhého dodavatele (${escapeHtml(state.a.name)} vs. ${escapeHtml(state.b.name)}); u položek dostupných jen u jednoho dodavatele se srovnání nepočítá.`);
+  notes.push(`Úspora je počítána oproti nejdražší dostupné nabídce stejného produktu napříč všemi porovnávanými ceníky; u produktů dostupných jen v jednom ceníku se srovnání nepočítá.`);
   note.textContent = notes.join(' ');
 }
 
@@ -1304,22 +1238,21 @@ function escapeHtml(s){
 document.getElementById('search').addEventListener('input', renderTable);
 document.getElementById('filter-select').addEventListener('change', renderTable);
 document.getElementById('brand-select').addEventListener('change', renderTable);
+document.getElementById('supplier-select-filter').addEventListener('change', renderTable);
 
 document.getElementById('btn-export').addEventListener('click', ()=>{
   const res = state.results;
   if(!res) return;
-  const rows = [['EAN','Název produktu','Dodavatel',`Cena ${state.a.name} (bez DPH)`,`Cena ${state.b.name} (bez DPH)`,'Nejlevnější dodavatel','Rozdíl (Kč)','Ks/karton A','Ks/karton B','Ks/paleta A','Ks/paleta B','Datum ceníku A','Datum ceníku B']];
-  res.matched.forEach(m=>{
-    rows.push([m.ean, m.name, 'spárováno', m.priceA, m.priceB, m.cheaper==='A'?state.a.name:state.b.name, m.diff, m.cartonA ?? '', m.cartonB ?? '', m.palletA ?? '', m.palletB ?? '', state.a.date, state.b.date]);
-  });
-  res.onlyA.forEach(p=>{
-    rows.push([p.ean, p.name, 'jen '+state.a.name, p.price, '', '', '', p.carton ?? '', '', p.pallet ?? '', '', state.a.date, '']);
-  });
-  res.onlyB.forEach(p=>{
-    rows.push([p.ean, p.name, 'jen '+state.b.name, '', p.price, '', '', '', p.carton ?? '', '', p.pallet ?? '', '', state.b.date]);
+  const rows = [['EAN','Název produktu','Dodavatel','Cena (bez DPH)','Nejlevnější?','Ks/karton','Ks/paleta','Datum ceníku']];
+  res.products.forEach(pr=>{
+    const minPrice = pr.offers[0].price;
+    pr.offers.forEach(o=>{
+      const sup = state.suppliers[o.supplierIdx];
+      rows.push([pr.ean, pr.name, sup?sup.name:'', o.price, o.price===minPrice?'ANO':'NE', o.carton ?? '', o.pallet ?? '', sup?sup.date:'']);
+    });
   });
   const ws = XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols'] = [{wch:16},{wch:42},{wch:16},{wch:16},{wch:16},{wch:20},{wch:12},{wch:11},{wch:11},{wch:11},{wch:11},{wch:14},{wch:14}];
+  ws['!cols'] = [{wch:16},{wch:42},{wch:22},{wch:16},{wch:11},{wch:11},{wch:11},{wch:14}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Porovnání cen');
   XLSX.writeFile(wb, 'porovnani_cenu_export.xlsx');
@@ -1348,8 +1281,7 @@ document.getElementById('btn-export-order').addEventListener('click', ()=>{
 // Import vlastní objednávky (EAN ze souboru nebo ručně vložené)
 // ============================================================
 
-state.importFileEans = [];
-let importMatches = []; // populated after "Spárovat s ceníky"
+let importMatches = [];
 
 document.getElementById('btn-import-toggle').addEventListener('click', ()=>{
   document.getElementById('import-panel').classList.toggle('hidden');
@@ -1402,15 +1334,9 @@ function handleImportFile(file){
 }
 
 function findInResults(ean){
-  const res = state.results;
-  if(!res) return null;
-  const m = res.matched.find(x=>x.ean===ean);
-  if(m) return { status:'matched', ref:m };
-  const pa = res.onlyA.find(x=>x.ean===ean);
-  if(pa) return { status:'onlyA', ref:pa };
-  const pb = res.onlyB.find(x=>x.ean===ean);
-  if(pb) return { status:'onlyB', ref:pb };
-  return { status:'notfound', ref:null };
+  const p = findProduct(ean);
+  if(!p) return { status:'notfound', ref:null };
+  return { status: p.offers.length>=2 ? 'multi' : 'single', ref:p };
 }
 
 document.getElementById('btn-import-process').addEventListener('click', ()=>{
@@ -1451,9 +1377,8 @@ document.getElementById('btn-import-process').addEventListener('click', ()=>{
 });
 
 function importStatusLabel(status){
-  if(status === 'matched') return `<span class="tag matched">spárováno</span>`;
-  if(status === 'onlyA') return `<span class="tag only">jen ${escapeHtml(state.a.name)}</span>`;
-  if(status === 'onlyB') return `<span class="tag only">jen ${escapeHtml(state.b.name)}</span>`;
+  if(status === 'multi') return `<span class="tag matched">více cenících</span>`;
+  if(status === 'single') return `<span class="tag only">jeden ceník</span>`;
   return `<span class="tag only" style="background:var(--bad-bg); color:var(--bad-ink);">nenalezeno</span>`;
 }
 
@@ -1482,10 +1407,10 @@ document.getElementById('btn-import-apply').addEventListener('click', ()=>{
   let applied = 0;
   importMatches.forEach(row=>{
     if(row.status === 'notfound' || !row.qty || row.qty <= 0) return;
-    const defaultSupplier = row.status === 'matched' ? row.ref.cheaper : (row.status === 'onlyA' ? 'A' : 'B');
+    const defaultSupplierIdx = row.ref.offers[0].supplierIdx;
     const existing = state.orders.get(row.ean);
-    const supplier = existing ? existing.supplier : defaultSupplier;
-    state.orders.set(row.ean, { qty: row.qty, supplier });
+    const supplierIdx = existing ? existing.supplierIdx : defaultSupplierIdx;
+    state.orders.set(row.ean, { qty: row.qty, supplierIdx });
     applied++;
   });
   document.getElementById('import-status').style.color = '';
