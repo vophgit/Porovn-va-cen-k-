@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VOPH porovnávač ceníků</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --ink:#2B1B0F;
+    --ink-soft:#8A7563;
+    --paper:#FFFFFF;
+    --panel:#FFFFFF;
+    --line:#F0DFC8;
+    --accent:#E8720C;
+    --accent-dark:#C2590A;
+    --accent-soft:#FFF1E0;
+    --accent-ink:#7A3D07;
+    --good:#2F6D4F;
+    --good-bg:#E4F0E9;
+    --bad-bg:#FBEADB;
+    --bad-ink:#9A5A16;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono{font-family:'IBM Plex Mono', monospace;}
+  h1,h2,h3{font-family:'Space Grotesk', sans-serif; margin:0; letter-spacing:-0.01em;}
+
+  header.app{
+    position:relative;
+    background:var(--accent);
+    color:#fff;
+    padding:38px 28px 34px;
+    overflow:hidden;
+  }
+  header.app::before{
+    content:"";
+    position:absolute; inset:0;
+    background-image: repeating-linear-gradient(90deg,
+      rgba(255,255,255,0.14) 0px, rgba(255,255,255,0.14) 2px,
+      transparent 2px, transparent 6px,
+      rgba(255,255,255,0.08) 6px, rgba(255,255,255,0.08) 7px,
+      transparent 7px, transparent 14px);
+    opacity:0.6;
+    pointer-events:none;
+  }
+  .app-inner{position:relative; max-width:1120px; margin:0 auto;}
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px; letter-spacing:0.14em; text-transform:uppercase;
+    color:#fff;
+    opacity:0.92;
+    margin-bottom:14px;
+  }
+  .eyebrow::before{content:"▍▍▍"; letter-spacing:1px; opacity:0.9;}
+  header.app h1{font-size:30px; font-weight:700; color:#fff;}
+  header.app p{margin:10px 0 0; color:#FFE6CC; font-size:14.5px; max-width:640px; line-height:1.55;}
+
+  main{max-width:1120px; margin:0 auto; padding:30px 28px 80px;}
+
+  .step{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:22px 24px;
+    margin-bottom:20px;
+  }
+  .step-head{display:flex; align-items:baseline; gap:10px; margin-bottom:16px;}
+  .step-num{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px; color:var(--accent-ink);
+    background:#F6E9D3; border-radius:5px; padding:2px 7px;
+  }
+  .step-head h2{font-size:16.5px;}
+  .step-sub{color:var(--ink-soft); font-size:13px; margin:2px 0 0 0;}
+
+  .upload-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
+  @media (max-width:760px){ .upload-grid{grid-template-columns:1fr;} }
+  .mapping-stack{display:grid; grid-template-columns:1fr; gap:16px;}
+
+  #drive-config{
+    border:1px solid var(--line); border-radius:8px; padding:2px 16px; background:#FAFBFA; margin-bottom:4px;
+  }
+  #drive-config summary{
+    cursor:pointer; padding:12px 0; font-weight:600; font-size:13px; color:var(--accent-dark); list-style:revert;
+  }
+  #drive-config[open] summary{margin-bottom:4px;}
+  #drive-config .field-row{margin-top:10px; padding-bottom:14px;}
+  #drive-config input[type=text]{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; background:#fff;
+  }
+  #drive-folder-row input[type=text]{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; background:#fff;
+  }
+  .drive-file-row{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; border:1px solid var(--line);
+    border-radius:7px; margin-bottom:8px; background:#fff;
+  }
+  .drive-file-row.checked{border-color:var(--accent); background:var(--accent-soft);}
+  .drive-file-row input[type=checkbox]{width:16px; height:16px; flex-shrink:0;}
+  .drive-file-row .dfname{font-weight:600; font-size:13px;}
+  .drive-file-row .dfmeta{font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft); margin-top:2px;}
+
+  .dropzone{
+    border:1.5px dashed #B9C4BD;
+    border-radius:8px;
+    padding:26px 16px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+    background:#FAFBFA;
+  }
+  .dropzone:hover, .dropzone.drag{border-color:var(--accent); background:#FBF3E4;}
+  .dropzone input{display:none;}
+  .dz-label{font-weight:600; font-size:13.5px; margin-bottom:2px;}
+  .dz-name{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft);}
+  .dz-icon{font-size:22px; margin-bottom:8px; opacity:0.65;}
+
+  .file-card{border:1px solid var(--line); border-radius:8px; padding:14px 16px; background:#FAFBFA;}
+  .file-card .fname{font-weight:600; font-size:13.5px; display:flex; justify-content:space-between; align-items:center;}
+  .file-card .fname .clear{cursor:pointer; color:var(--ink-soft); font-size:12px; font-family:'IBM Plex Mono', monospace;}
+  .file-card .fname .clear:hover{color:var(--ink);}
+
+  .field-row{margin-top:14px;}
+  .field-row label{display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-soft); margin-bottom:5px;}
+  .field-row input[type=text]{
+    width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px;
+    font-family:'IBM Plex Mono', monospace; font-size:12.5px; background:#fff;
+  }
+
+  .sheet-row-4{
+    display:grid; grid-template-columns:auto 1fr 1fr 1fr 1fr; gap:8px; align-items:center;
+    padding:9px 0; border-top:1px solid var(--line); font-size:12.5px;
+  }
+  .sheet-row-4:first-of-type{border-top:none;}
+  .sheet-row-4 .sname{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); display:flex; align-items:center; gap:6px;}
+  .sheet-row-5{
+    display:grid; grid-template-columns:auto 1fr 1fr 1fr 1fr 1fr; gap:8px; align-items:center;
+    padding:9px 0; border-top:1px solid var(--line); font-size:12.5px;
+  }
+  .sheet-row-5:first-of-type{border-top:none;}
+  .sheet-row-5 .sname{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft); display:flex; align-items:center; gap:6px;}
+  .sheet-row-6{
+    display:grid; grid-template-columns:auto 1fr 1fr 1fr 1fr 1fr 1fr; gap:6px; align-items:center;
+    padding:9px 0; border-top:1px solid var(--line); font-size:12px;
+  }
+  .sheet-row-6:first-of-type{border-top:none;}
+  .sheet-row-6 .sname{font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--ink-soft); display:flex; align-items:center; gap:5px;}
+  .sheet-row-6 select{font-size:11px; padding:5px 4px;}
+  select{
+    width:100%; padding:6px 8px; border:1px solid var(--line); border-radius:6px;
+    font-size:12px; background:#fff; color:var(--ink); font-family:'IBM Plex Sans',sans-serif;
+  }
+  .colhead{font-size:10px; text-transform:uppercase; letter-spacing:0.05em; color:var(--ink-soft); font-weight:600;}
+
+  button{
+    font-family:'IBM Plex Sans', sans-serif; cursor:pointer; border:none; border-radius:7px;
+    font-weight:600; font-size:13.5px; padding:11px 20px;
+  }
+  .btn-primary{background:var(--accent); color:#fff;}
+  .btn-primary:disabled{background:#EAD9C4; color:#fff; cursor:not-allowed;}
+  .btn-primary:not(:disabled):hover{background:var(--accent-dark);}
+  .btn-ghost{background:#fff; color:var(--accent-dark); border:1px solid var(--accent);}
+  .btn-ghost:hover{background:var(--accent-soft);}
+  .btn-accent{background:var(--accent); color:#fff;}
+  .btn-accent:hover{background:var(--accent-dark);}
+
+  .actions{display:flex; justify-content:center; margin:26px 0;}
+
+  .summary-grid{display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:18px;}
+  @media (max-width:760px){.summary-grid{grid-template-columns:repeat(2,1fr);}}
+  .stat{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px;}
+  .stat .num{font-family:'Space Grotesk',sans-serif; font-size:26px; font-weight:700;}
+  .stat .lbl{font-size:11.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.05em; margin-top:3px;}
+  .stat.good .num{color:var(--good);}
+
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px;}
+  .toolbar input[type=text]{
+    flex:1; min-width:180px; padding:9px 12px; border:1px solid var(--line); border-radius:7px;
+    font-size:13px; font-family:'IBM Plex Sans',sans-serif;
+  }
+  .toolbar select{width:auto; padding:9px 10px;}
+
+  table{width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden;}
+  thead th{
+    background:var(--accent); color:#fff; text-align:left; padding:10px 12px; font-size:11px;
+    text-transform:uppercase; letter-spacing:0.05em; font-weight:600; position:sticky; top:0;
+  }
+  thead th.sortable-th{cursor:pointer; user-select:none; transition:background .12s;}
+  thead th.sortable-th:hover{background:var(--accent-dark);}
+  .sort-arrow{font-size:9px; margin-left:3px; opacity:0.9;}
+  tbody td{padding:9px 12px; border-top:1px solid var(--line); font-size:13px; vertical-align:middle;}
+  tbody tr:hover{background:#FAFAF7;}
+  td.ean{font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--ink-soft);}
+  th.ean{font-family:'IBM Plex Mono', monospace; font-size:11px;}
+  td.price{font-family:'IBM Plex Mono', monospace; text-align:right;}
+  .price-cell.best{background:var(--good-bg); color:var(--good); font-weight:600; border-radius:5px;}
+  .tag{display:inline-block; font-size:10.5px; padding:2px 7px; border-radius:20px; font-family:'IBM Plex Mono',monospace;}
+  .tag.only{background:var(--bad-bg); color:var(--bad-ink);}
+  .tag.matched{background:var(--good-bg); color:var(--good);}
+
+  .table-wrap{max-height:560px; overflow:auto; border-radius:var(--radius);}
+
+  .empty{text-align:center; color:var(--ink-soft); padding:50px 20px; font-size:13.5px;}
+  .hint{color:var(--ink-soft); font-size:12px; margin-top:10px; line-height:1.5;}
+  .preview{font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--ink-soft); margin-top:6px; white-space:pre-wrap; line-height:1.6;}
+
+  footer{text-align:center; color:var(--ink-soft); font-size:11.5px; padding:20px; font-family:'IBM Plex Mono',monospace;}
+  .hidden{display:none !important;}
+
+  .table-scroll{overflow-x:auto;}
+  table{min-width:1080px;}
+  td.qty-cell input{
+    width:80px; padding:6px 8px; border:1px solid var(--line); border-radius:6px;
+    font-family:'IBM Plex Mono',monospace; font-size:12.5px; text-align:right;
+  }
+  td.qty-cell input:focus{outline:none; border-color:var(--accent);}
+  .pallets-hint{display:block; font-size:10px; color:var(--ink-soft); margin-top:3px; font-family:'IBM Plex Mono',monospace;}
+  td select.supplier-select{font-family:'IBM Plex Mono',monospace; font-size:11.5px; padding:5px 6px;}
+  td.pallet-col{font-family:'IBM Plex Mono',monospace; text-align:right; color:var(--ink-soft); font-size:12px;}
+
+  .order-panel{
+    background:var(--accent-soft); color:var(--ink); border-radius:var(--radius); border:1.5px solid var(--accent);
+    padding:20px 24px; margin-top:18px; display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;
+  }
+  .order-panel .op-stats{display:flex; gap:28px; flex-wrap:wrap;}
+  .order-panel .op-stat .num{font-family:'Space Grotesk',sans-serif; font-size:22px; font-weight:700; color:var(--accent-dark);}
+  .order-panel .op-stat .lbl{font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.05em; margin-top:2px;}
+</style>
+</head>
+<body>
+
+<header class="app">
+  <div class="app-inner">
+    <div class="eyebrow">Proof of concept · porovnání cen dodavatelů</div>
+    <h1>VOPH porovnávač ceníků</h1>
+    <p>Nahraj ceníky dvou dodavatelů (.xlsx), potvrď, kde se v souboru nachází EAN, název a nákupní cena, a nástroj je spáruje podle EAN a řekne, kdo je pro každý produkt levnější. Vše se počítá přímo v prohlížeči — soubory nikam neodcházejí.</p>
+  </div>
+</header>
+
+<main>
+
+  <!-- STEP 1: Google Drive -->
+  <section class="step">
+    <div class="step-head">
+      <span class="step-num">01</span>
+      <div>
+        <h2>Načti ceníky z Google Disku</h2>
+        <p class="step-sub">Vyžaduje jednorázové nastavení OAuth klienta (viz níže) a přihlášení Google účtem, který má ke složce přístup.</p>
+      </div>
+    </div>
+
+    <details id="drive-config" open>
+      <summary>Nastavení připojení (otevři při prvním spuštění)</summary>
+      <div class="field-row">
+        <label>Google OAuth Client ID</label>
+        <input type="text" id="drive-client-id" placeholder="123456789-abc...apps.googleusercontent.com">
+        <p class="hint">
+          Vytvoří se v <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a> → „Create credentials" → „OAuth client ID" → typ „Web application".
+          Do „Authorized JavaScript origins" vlož přesnou adresu, ze které tuhle stránku otevíráš (např. <span class="mono">https://tvoje-domena.cz</span>) — funguje jen na http(s) adrese, ne při otevření souboru přímo z disku (file://).
+          V „OAuth consent screen" u interního G Workspace účtu (@voph.cz) stačí typ „Internal" a není potřeba schvalování Googlem.
+          Client ID se nikam neukládá, po zavření stránky ho budeš muset vložit znovu (nebo si ho natvrdo zapiš do kódu appky, viz komentář <span class="mono">GOOGLE_CLIENT_ID</span> na začátku souboru).
+        </p>
+      </div>
+    </details>
+
+    <div id="drive-connect-row" class="field-row" style="margin-top:14px;">
+      <button class="btn-primary" id="btn-drive-connect">Přihlásit se přes Google</button>
+      <span id="drive-status" class="hint" style="margin-top:8px; display:block;"></span>
+    </div>
+
+    <div id="drive-folder-row" class="field-row hidden">
+      <label>Odkaz na složku Google Disku (nebo jen ID složky)</label>
+      <input type="text" id="drive-folder-url" placeholder="https://drive.google.com/drive/folders/...">
+      <div style="margin-top:10px;">
+        <button class="btn-ghost" id="btn-drive-list">Načíst ceníky ze složky</button>
+      </div>
+      <p class="hint" id="drive-list-status"></p>
+    </div>
+
+    <div id="drive-files-panel" class="hidden" style="margin-top:16px;">
+      <label style="display:block; font-size:11.5px; text-transform:uppercase; letter-spacing:0.06em; color:var(--ink-soft); margin-bottom:8px;">
+        Zaškrtni přesně dva ceníky k porovnání
+      </label>
+      <div id="drive-files-list"></div>
+      <div style="margin-top:14px;">
+        <button class="btn-accent" id="btn-drive-use" disabled>Použít vybrané ceníky</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 1b: manual upload fallback -->
+  <section class="step">
+    <div class="step-head">
+      <span class="step-num">01b</span>
+      <div>
+        <h2>...nebo nahraj ceníky ručně</h2>
+        <p class="step-sub">Podporované formáty: .xlsx, .xls — použij, pokud ceník nemáš na Disku (např. přišel e-mailem)</p>
+      </div>
+    </div>
+    <div class="upload-grid">
+      <div id="dz-a" class="dropzone">
+        <div class="dz-icon">⇪</div>
+        <div class="dz-label">Dodavatel A</div>
+        <div class="dz-name" id="dz-a-name">Klikni nebo přetáhni soubor</div>
+        <input type="file" id="file-a" accept=".xlsx,.xls">
+      </div>
+      <div id="dz-b" class="dropzone">
+        <div class="dz-icon">⇪</div>
+        <div class="dz-label">Dodavatel B</div>
+        <div class="dz-name" id="dz-b-name">Klikni nebo přetáhni soubor</div>
+        <input type="file" id="file-b" accept=".xlsx,.xls">
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 2: mapping -->
+  <section class="step hidden" id="mapping-section">
+    <div class="step-head">
+      <span class="step-num">02</span>
+      <div>
+        <h2>Zkontroluj mapování sloupců</h2>
+        <p class="step-sub">Nástroj se pokusil sloupce odhadnout automaticky — u nestandardních ceníků (např. jiná struktura) si mapování uprav.</p>
+      </div>
+    </div>
+    <div class="mapping-stack" id="mapping-grid"></div>
+  </section>
+
+  <div class="actions hidden" id="compare-actions">
+    <button class="btn-primary" id="btn-compare" disabled>Porovnat ceníky</button>
+  </div>
+
+  <!-- STEP 3: results -->
+  <section id="results-section" class="hidden">
+    <div class="summary-grid" id="summary-grid"></div>
+
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="Hledat podle názvu nebo EAN…">
+      <select id="filter-select">
+        <option value="all">Zobrazit vše</option>
+        <option value="matched" selected>Jen spárované</option>
+        <option value="onlyA">Jen dodavatel A</option>
+        <option value="onlyB">Jen dodavatel B</option>
+      </select>
+      <select id="brand-select">
+        <option value="all">Všechny značky</option>
+      </select>
+      <button class="btn-ghost" id="btn-export">Stáhnout porovnání (Excel)</button>
+    </div>
+
+    <div class="table-wrap table-scroll">
+      <table>
+        <thead>
+          <tr id="thead-row"></tr>
+        </thead>
+        <tbody id="results-body"></tbody>
+      </table>
+    </div>
+
+    <div class="order-panel">
+      <div class="op-stats">
+        <div class="op-stat"><div class="num" id="op-count">0</div><div class="lbl">Položek v objednávce</div></div>
+        <div class="op-stat"><div class="num" id="op-units">0</div><div class="lbl">Celkem kusů</div></div>
+        <div class="op-stat"><div class="num" id="op-pallets">0</div><div class="lbl">Palet celkem</div></div>
+        <div class="op-stat"><div class="num" id="op-value">0 Kč</div><div class="lbl">Hodnota objednávky (bez DPH)</div></div>
+        <div class="op-stat"><div class="num" id="op-savings">0 %</div><div class="lbl">Úspora oproti druhému dodavateli</div></div>
+      </div>
+      <button class="btn-accent" id="btn-export-order">Stáhnout objednávku (Excel)</button>
+    </div>
+    <p class="hint" id="op-note" style="color:var(--ink-soft); margin-top:6px;"></p>
+  </section>
+
+</main>
+
+<footer>vytvořeno pro proof-of-concept automatizace objednávek · data se zpracovávají lokálně v prohlížeči</footer>
+
+<script>
+// Paste your own OAuth Client ID here to skip re-entering it every session
+// (get one at https://console.cloud.google.com/apis/credentials — see the
+// "Nastavení připojení" panel in the app for details).
+const GOOGLE_CLIENT_ID = '';
+const GOOGLE_DRIVE_FOLDER_DEFAULT = 'https://drive.google.com/drive/u/3/folders/1sJb8mwrcLlh_agPISxU_msVUY53gDOUC';
+
+const state = {
+  a: { file:null, workbook:null, sheets:{}, name:'Dodavatel A', date:'' },
+  b: { file:null, workbook:null, sheets:{}, name:'Dodavatel B', date:'' },
+  results: null,
+  orders: new Map(), // ean -> { qty:number, supplier:'A'|'B' }
+  sort: { key:null, dir:'asc' },
+  drive: { tokenClient:null, accessToken:null, files:[], selected:[] } // selected: ordered array of fileIds (max 2)
+};
+
+function normEan(v){
+  if(v === null || v === undefined || v === '') return null;
+  if(typeof v === 'number'){
+    v = Math.round(v).toString();
+  }
+  const s = String(v).replace(/\D/g,'');
+  return s.length ? s : null;
+}
+
+function guessSupplierName(filename){
+  let n = filename.replace(/\.[^/.]+$/, '');
+  n = n.replace(/^\d+[_\-]+/, '');
+  n = n.replace(/_+/g, ' ').replace(/\s*-\s*/g, ' - ').trim();
+  const parts = n.split(' - ').filter(p => p.trim().length);
+  let candidate = parts[0] ? parts[0].trim() : n;
+  if(candidate.length < 2) candidate = n || filename;
+  return candidate;
+}
+
+function colLetter(idx){
+  let s = '';
+  idx = idx + 1;
+  while(idx > 0){
+    let m = (idx - 1) % 26;
+    s = String.fromCharCode(65 + m) + s;
+    idx = Math.floor((idx - m) / 26);
+  }
+  return s;
+}
+
+// Guess header row + column mapping for a single sheet (array-of-arrays form)
+function analyzeSheet(rows){
+  const scanLimit = Math.min(rows.length, 20);
+  let bestRow = 0, bestScore = -1;
+  for(let r=0; r<scanLimit; r++){
+    const row = rows[r] || [];
+    let score = 0;
+    row.forEach(cell=>{
+      const t = (cell===null||cell===undefined) ? '' : String(cell).toLowerCase();
+      if(/ean/.test(t)) score += 1;
+      if(/název|nazev|produkt|name/.test(t)) score += 1;
+      if(/cena|price/.test(t)) score += 1;
+    });
+    if(score > bestScore){ bestScore = score; bestRow = r; }
+  }
+  const header = (rows[bestRow] || []).map(c => c===null||c===undefined ? '' : String(c).trim());
+
+  function scoreEan(h){
+    const t = h.toLowerCase();
+    if(!/ean/.test(t)) return -99;
+    let s = 1;
+    if(/ks/.test(t)) s += 3;
+    if(/kar|krt/.test(t)) s -= 3;
+    return s;
+  }
+  function scoreName(h){
+    const t = h.toLowerCase();
+    if(/název|nazev|produkt|^name$/.test(t)) return 3;
+    return -99;
+  }
+  function scorePrice(h){
+    const t = h.toLowerCase();
+    if(!/cena|price|\bpc\b/.test(t)) return -99;
+    let s = 1;
+    if(/nákupní|nakupni|purchase/.test(t)) s += 4;
+    if(/bez\s*dph/.test(t)) s += 3;
+    if(/\bs\s*dph\b/.test(t)) s -= 5;
+    if(/list|běžná|bezna|katalog/.test(t)) s -= 3;
+    if(/akce|akční|akcni|speciální|specialni|kamion/.test(t)) s -= 3;
+    return s;
+  }
+
+  function scorePallet(h){
+    const t = h.toLowerCase();
+    if(!/pal/.test(t)) return -99;
+    let s = 1;
+    if(/ks/.test(t)) s += 4;
+    if(/kar/.test(t)) s -= 3;
+    if(/vrstva/.test(t)) s -= 2;
+    return s;
+  }
+
+  function scoreCarton(h){
+    const t = h.toLowerCase();
+    if(!/kar/.test(t)) return -99;
+    let s = 1;
+    if(/ks/.test(t)) s += 4;
+    if(/pal/.test(t)) s -= 3;
+    if(/vrstva/.test(t)) s -= 2;
+    return s;
+  }
+
+  let eanCol=-1, eanScore=-99, nameCol=-1, nameScore=-99, priceCol=-1, priceScore=-99, palletCol=-1, palletScore=-99, cartonCol=-1, cartonScore=-99;
+  header.forEach((h,i)=>{
+    const es = scoreEan(h); if(es > eanScore){ eanScore=es; eanCol=i; }
+    const ns = scoreName(h); if(ns > nameScore){ nameScore=ns; nameCol=i; }
+    const ps = scorePrice(h); if(ps > priceScore){ priceScore=ps; priceCol=i; }
+    const pls = scorePallet(h); if(pls > palletScore){ palletScore=pls; palletCol=i; }
+    const cs = scoreCarton(h); if(cs > cartonScore){ cartonScore=cs; cartonCol=i; }
+  });
+  if(eanCol===-1 && header.length) eanCol=0;
+  if(nameCol===-1 && header.length) nameCol=Math.min(3,header.length-1);
+  if(priceCol===-1 && header.length) priceCol=Math.min(header.length-1,header.length-1);
+  if(palletScore <= -99) palletCol = -1;
+  if(cartonScore <= -99) cartonCol = -1;
+
+  // Detect a "brand / section" column: many price lists mark groups of products with
+  // divider rows (e.g. "CIF", "DOMESTOS") in one column while EAN/name are empty on that row.
+  // The column with the most such divider values is very likely the brand marker column.
+  let brandCol = -1, brandHits = 0;
+  const usedCols = new Set([eanCol, nameCol, priceCol, palletCol, cartonCol]);
+  for(let c = 0; c < header.length; c++){
+    if(usedCols.has(c)) continue;
+    let hits = 0;
+    for(let r = bestRow+1; r < rows.length; r++){
+      const row = rows[r] || [];
+      const eanEmpty = row[eanCol]===null||row[eanCol]===undefined||row[eanCol]==='';
+      const nameEmpty = row[nameCol]===null||row[nameCol]===undefined||String(row[nameCol]).trim()==='';
+      const val = row[c];
+      const valPresent = !(val===null||val===undefined||String(val).trim()==='');
+      if(eanEmpty && nameEmpty && valPresent) hits++;
+    }
+    if(hits > brandHits){ brandHits = hits; brandCol = c; }
+  }
+  if(brandHits < 2) brandCol = -1; // not enough divider rows to trust this column
+
+  return { headerRowIndex: bestRow, header, eanCol, nameCol, priceCol, palletCol, cartonCol, brandCol, rows };
+}
+
+function applyWorkbookToState(targetKey, wb, displayName, fileRef){
+  state[targetKey].file = fileRef;
+  state[targetKey].workbook = wb;
+  state[targetKey].sheets = {};
+  wb.SheetNames.forEach(sn=>{
+    const ws = wb.Sheets[sn];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:null});
+    if(!rows.length) return;
+    const analysis = analyzeSheet(rows);
+    state[targetKey].sheets[sn] = Object.assign({included:true}, analysis);
+  });
+  state[targetKey].name = guessSupplierName(displayName) || labelFor(targetKey);
+  document.getElementById('dz-'+targetKey+'-name').textContent = displayName;
+  document.getElementById('dz-'+targetKey).classList.add('drag');
+  renderMapping();
+}
+
+function readWorkbookFile(file, targetKey){
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const data = new Uint8Array(e.target.result);
+    const wb = XLSX.read(data, {type:'array'});
+    applyWorkbookToState(targetKey, wb, file.name, file);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+['a','b'].forEach(key=>{
+  const dz = document.getElementById('dz-'+key);
+  const input = document.getElementById('file-'+key);
+  dz.addEventListener('click', ()=>input.click());
+  input.addEventListener('change', e=>{
+    if(e.target.files[0]) readWorkbookFile(e.target.files[0], key);
+  });
+  dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.classList.add('drag'); });
+  dz.addEventListener('dragleave', ()=> dz.classList.remove('drag'));
+  dz.addEventListener('drop', e=>{
+    e.preventDefault();
+    if(e.dataTransfer.files[0]) readWorkbookFile(e.dataTransfer.files[0], key);
+  });
+});
+
+// ============================================================
+// Google Drive integration (OAuth via Google Identity Services)
+// ============================================================
+
+document.getElementById('drive-client-id').value = GOOGLE_CLIENT_ID;
+document.getElementById('drive-folder-url').value = GOOGLE_DRIVE_FOLDER_DEFAULT;
+
+function driveExtractFolderId(input){
+  const s = input.trim();
+  const m = s.match(/folders\/([a-zA-Z0-9_-]+)/);
+  if(m) return m[1];
+  if(/^[a-zA-Z0-9_-]{10,}$/.test(s)) return s; // looks like a bare ID already
+  return null;
+}
+
+function driveSetStatus(msg, isError){
+  const el = document.getElementById('drive-status');
+  el.textContent = msg;
+  el.style.color = isError ? '#B23A2E' : '';
+}
+
+document.getElementById('btn-drive-connect').addEventListener('click', ()=>{
+  const clientId = document.getElementById('drive-client-id').value.trim();
+  if(!clientId){
+    driveSetStatus('Nejdřív vlož Google OAuth Client ID výše (rozklikni „Nastavení připojení").', true);
+    return;
+  }
+  if(typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2){
+    driveSetStatus('Knihovna Google Identity Services se nenačetla. Appka musí běžet na http(s) adrese (ne otevřená přímo ze souboru), a Google skripty nesmí být blokované.', true);
+    return;
+  }
+  driveSetStatus('Přihlašování…');
+  state.drive.tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId,
+    scope: 'https://www.googleapis.com/auth/drive.readonly',
+    callback: (resp)=>{
+      if(resp.error){
+        driveSetStatus('Přihlášení se nezdařilo: ' + resp.error, true);
+        return;
+      }
+      state.drive.accessToken = resp.access_token;
+      driveSetStatus('Přihlášeno. Teď načti obsah složky níže.');
+      document.getElementById('btn-drive-connect').textContent = 'Znovu se přihlásit';
+      document.getElementById('drive-folder-row').classList.remove('hidden');
+      document.getElementById('drive-config').removeAttribute('open');
+    }
+  });
+  state.drive.tokenClient.requestAccessToken();
+});
+
+async function driveApiFetch(url){
+  const res = await fetch(url, {
+    headers: { 'Authorization': 'Bearer ' + state.drive.accessToken }
+  });
+  if(!res.ok){
+    let detail = '';
+    try{
+      const errBody = await res.json();
+      detail = errBody?.error?.message || errBody?.error?.status || JSON.stringify(errBody).slice(0,200);
+    } catch(e){
+      detail = await res.text().catch(()=>res.statusText);
+    }
+    if(res.status === 401){
+      throw new Error('Přihlášení vypršelo, klikni znovu na "Znovu se přihlásit". (Detail: ' + detail + ')');
+    }
+    throw new Error(`Drive API chyba ${res.status}: ${detail}`);
+  }
+  return res;
+}
+
+document.getElementById('btn-drive-list').addEventListener('click', async ()=>{
+  const statusEl = document.getElementById('drive-list-status');
+  const folderInput = document.getElementById('drive-folder-url').value;
+  const folderId = driveExtractFolderId(folderInput);
+  if(!folderId){
+    statusEl.textContent = 'Nepodařilo se z odkazu přečíst ID složky.';
+    statusEl.style.color = '#B23A2E';
+    return;
+  }
+  statusEl.textContent = 'Načítám seznam souborů…';
+  statusEl.style.color = '';
+  try{
+    const q = encodeURIComponent(
+      `'${folderId}' in parents and trashed = false and ` +
+      `(mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or ` +
+      `mimeType='application/vnd.ms-excel' or mimeType='application/vnd.google-apps.spreadsheet')`
+    );
+    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,mimeType,modifiedTime,size)&pageSize=100&supportsAllDrives=true&includeItemsFromAllDrives=true`;
+    const res = await driveApiFetch(url);
+    const data = await res.json();
+    state.drive.files = data.files || [];
+    state.drive.selected = [];
+    if(!state.drive.files.length){
+      statusEl.textContent = 'Ve složce jsem nenašel žádný .xlsx/.xls/Sheets soubor (nebo do ní účet nevidí).';
+      statusEl.style.color = '#B23A2E';
+      document.getElementById('drive-files-panel').classList.add('hidden');
+      return;
+    }
+    statusEl.textContent = `Nalezeno ${state.drive.files.length} ceníků.`;
+    renderDriveFiles();
+    document.getElementById('drive-files-panel').classList.remove('hidden');
+  } catch(err){
+    statusEl.textContent = err.message;
+    statusEl.style.color = '#B23A2E';
+  }
+});
+
+function renderDriveFiles(){
+  const list = document.getElementById('drive-files-list');
+  list.innerHTML = state.drive.files.map(f=>{
+    const checked = state.drive.selected.includes(f.id);
+    const guessed = guessSupplierName(f.name);
+    const modified = f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('cs-CZ') : '';
+    return `<label class="drive-file-row${checked?' checked':''}">
+      <input type="checkbox" data-drive-file="${f.id}" ${checked?'checked':''}>
+      <div>
+        <div class="dfname">${escapeHtml(guessed)}</div>
+        <div class="dfmeta">${escapeHtml(f.name)} · upraveno ${modified}</div>
+      </div>
+    </label>`;
+  }).join('');
+
+  list.querySelectorAll('input[data-drive-file]').forEach(cb=>{
+    cb.addEventListener('change', ()=>{
+      const id = cb.getAttribute('data-drive-file');
+      if(cb.checked){
+        if(state.drive.selected.length >= 2){
+          cb.checked = false;
+          document.getElementById('drive-list-status').textContent = 'Můžeš vybrat maximálně dva ceníky najednou (fáze 1 — porovnání dvou dodavatelů). Nejdřív jeden odškrtni.';
+          document.getElementById('drive-list-status').style.color = '#B23A2E';
+          return;
+        }
+        state.drive.selected.push(id);
+      } else {
+        state.drive.selected = state.drive.selected.filter(x=>x!==id);
+      }
+      renderDriveFiles();
+      document.getElementById('btn-drive-use').disabled = state.drive.selected.length !== 2;
+    });
+  });
+}
+
+async function driveDownloadAsWorkbook(file){
+  let url;
+  if(file.mimeType === 'application/vnd.google-apps.spreadsheet'){
+    url = `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')}`;
+  } else {
+    url = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&supportsAllDrives=true`;
+  }
+  const res = await driveApiFetch(url);
+  const buf = await res.arrayBuffer();
+  return XLSX.read(new Uint8Array(buf), {type:'array'});
+}
+
+document.getElementById('btn-drive-use').addEventListener('click', async ()=>{
+  const btn = document.getElementById('btn-drive-use');
+  const statusEl = document.getElementById('drive-list-status');
+  if(state.drive.selected.length !== 2) return;
+  btn.disabled = true;
+  statusEl.style.color = '';
+  try{
+    const [idA, idB] = state.drive.selected;
+    const fileA = state.drive.files.find(f=>f.id===idA);
+    const fileB = state.drive.files.find(f=>f.id===idB);
+    statusEl.textContent = `Stahuji „${fileA.name}"…`;
+    const wbA = await driveDownloadAsWorkbook(fileA);
+    applyWorkbookToState('a', wbA, fileA.name, {driveId:fileA.id, name:fileA.name});
+    statusEl.textContent = `Stahuji „${fileB.name}"…`;
+    const wbB = await driveDownloadAsWorkbook(fileB);
+    applyWorkbookToState('b', wbB, fileB.name, {driveId:fileB.id, name:fileB.name});
+    statusEl.textContent = 'Oba ceníky načteny z Disku — zkontroluj mapování sloupců níže.';
+  } catch(err){
+    statusEl.textContent = err.message;
+    statusEl.style.color = '#B23A2E';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function renderMapping(){
+  const section = document.getElementById('mapping-section');
+  const grid = document.getElementById('mapping-grid');
+  if(!state.a.workbook && !state.b.workbook){ section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+  grid.innerHTML = '';
+  ['a','b'].forEach(key=>{
+    const st = state[key];
+    if(!st.workbook) return;
+    const card = document.createElement('div');
+    card.className = 'file-card';
+    let html = `<div class="fname"><span>${labelFor(key)} · <span class="mono">${st.file.name}</span></span>
+      <span class="clear" data-clear="${key}">vymazat</span></div>`;
+
+    html += `<div class="field-row"><label>Název dodavatele (zobrazí se v tabulce)</label>
+      <input type="text" data-name-input="${key}" value="${escapeHtml(st.name)}"></div>`;
+
+    html += `<div class="field-row"><label>Datum ceníku (volitelné)</label>
+      <input type="text" data-date-input="${key}" placeholder="např. 16.6.2026" value="${st.date}"></div>`;
+
+    html += `<div class="field-row"><label>Listy a sloupce</label><div style="overflow-x:auto;">`;
+    html += `<div class="sheet-row-6" style="min-width:640px;"><span></span><span class="colhead">EAN</span><span class="colhead">Název</span><span class="colhead">Cena bez DPH</span><span class="colhead">Ks/karton</span><span class="colhead">Ks/paleta</span><span class="colhead">Značka</span></div>`;
+    Object.keys(st.sheets).forEach(sn=>{
+      const sheet = st.sheets[sn];
+      const opts = sheet.header.map((h,i)=>`<option value="${i}">${colLetter(i)}: ${h || '(prázdné)'}</option>`).join('');
+      const optsWithNone = `<option value="-1">— nepoužito —</option>` + opts;
+      const optsBrand = `<option value="-2">— podle názvu produktu —</option><option value="-1">— nepoužito —</option>` + opts;
+      html += `<div class="sheet-row-6" style="min-width:640px;">
+        <span class="sname"><input type="checkbox" data-sheet-toggle="${key}|${sn}" ${sheet.included?'checked':''}> ${sn}</span>
+        <select data-col="${key}|${sn}|ean">${opts}</select>
+        <select data-col="${key}|${sn}|name">${opts}</select>
+        <select data-col="${key}|${sn}|price">${opts}</select>
+        <select data-col="${key}|${sn}|carton">${optsWithNone}</select>
+        <select data-col="${key}|${sn}|pallet">${optsWithNone}</select>
+        <select data-col="${key}|${sn}|brand">${optsBrand}</select>
+      </div>`;
+    });
+    html += `</div></div>`;
+    card.innerHTML = html;
+    grid.appendChild(card);
+  });
+
+  // wire up selects to preselected values
+  ['a','b'].forEach(key=>{
+    const st = state[key];
+    if(!st.workbook) return;
+    Object.keys(st.sheets).forEach(sn=>{
+      const sheet = st.sheets[sn];
+      grid.querySelector(`select[data-col="${key}|${sn}|ean"]`).value = sheet.eanCol;
+      grid.querySelector(`select[data-col="${key}|${sn}|name"]`).value = sheet.nameCol;
+      grid.querySelector(`select[data-col="${key}|${sn}|price"]`).value = sheet.priceCol;
+      grid.querySelector(`select[data-col="${key}|${sn}|carton"]`).value = sheet.cartonCol;
+      grid.querySelector(`select[data-col="${key}|${sn}|pallet"]`).value = sheet.palletCol;
+      grid.querySelector(`select[data-col="${key}|${sn}|brand"]`).value = (sheet.brandCol >= 0) ? sheet.brandCol : -2;
+    });
+  });
+
+  grid.querySelectorAll('[data-clear]').forEach(el=>{
+    el.addEventListener('click', ()=>{
+      const key = el.getAttribute('data-clear');
+      state[key] = { file:null, workbook:null, sheets:{}, name: labelFor(key), date:'' };
+      document.getElementById('dz-'+key+'-name').textContent = 'Klikni nebo přetáhni soubor';
+      document.getElementById('dz-'+key).classList.remove('drag');
+      renderMapping();
+      updateCompareButton();
+    });
+  });
+  grid.querySelectorAll('[data-name-input]').forEach(el=>{
+    el.addEventListener('input', ()=>{ state[el.getAttribute('data-name-input')].name = el.value || labelFor(el.getAttribute('data-name-input')); });
+  });
+  grid.querySelectorAll('[data-date-input]').forEach(el=>{
+    el.addEventListener('input', ()=>{ state[el.getAttribute('data-date-input')].date = el.value; });
+  });
+  grid.querySelectorAll('[data-sheet-toggle]').forEach(el=>{
+    el.addEventListener('change', ()=>{
+      const [key, sn] = el.getAttribute('data-sheet-toggle').split('|');
+      state[key].sheets[sn].included = el.checked;
+    });
+  });
+  grid.querySelectorAll('select[data-col]').forEach(el=>{
+    el.addEventListener('change', ()=>{
+      const [key, sn, field] = el.getAttribute('data-col').split('|');
+      state[key].sheets[sn][field+'Col'] = parseInt(el.value,10);
+    });
+  });
+
+  document.getElementById('compare-actions').classList.remove('hidden');
+  updateCompareButton();
+}
+
+function labelFor(key){ return key==='a' ? 'Dodavatel A' : 'Dodavatel B'; }
+
+function updateCompareButton(){
+  const btn = document.getElementById('btn-compare');
+  btn.disabled = !(state.a.workbook && state.b.workbook);
+}
+
+function deriveBrandFromName(name){
+  const w = name.trim().split(/\s+/)[0] || '';
+  return w.replace(/[^\wÀ-ž.-]/g,'');
+}
+
+function extractProducts(st){
+  const products = [];
+  let dupCount = 0;
+  const seen = new Set();
+  Object.keys(st.sheets).forEach(sn=>{
+    const sheet = st.sheets[sn];
+    if(!sheet.included) return;
+    let currentBrand = null;
+    for(let r = sheet.headerRowIndex+1; r < sheet.rows.length; r++){
+      const row = sheet.rows[r] || [];
+      const eanRaw = row[sheet.eanCol];
+      const nameRaw = row[sheet.nameCol];
+      const priceRaw = row[sheet.priceCol];
+      const ean = normEan(eanRaw);
+      const name = (nameRaw===null||nameRaw===undefined) ? '' : String(nameRaw).trim();
+
+      // Divider/section row (e.g. "CIF", "DOMESTOS") marks the brand for rows that follow
+      if(sheet.brandCol >= 0 && !ean && !name){
+        const bv = row[sheet.brandCol];
+        if(bv !== null && bv !== undefined && String(bv).trim() !== ''){
+          currentBrand = String(bv).trim();
+        }
+      }
+
+      if(!ean || !name) continue; // skip category/divider/empty rows
+      let price = priceRaw;
+      if(typeof price === 'string') price = parseFloat(price.replace(',','.').replace(/[^\d.\-]/g,''));
+      if(typeof price !== 'number' || isNaN(price)) continue;
+      if(seen.has(ean)){ dupCount++; continue; }
+      seen.add(ean);
+      let pallet = null;
+      if(sheet.palletCol >= 0){
+        let pv = row[sheet.palletCol];
+        if(typeof pv === 'string') pv = parseFloat(pv.replace(',','.').replace(/[^\d.\-]/g,''));
+        if(typeof pv === 'number' && !isNaN(pv)) pallet = pv;
+      }
+      let carton = null;
+      if(sheet.cartonCol >= 0){
+        let cv = row[sheet.cartonCol];
+        if(typeof cv === 'string') cv = parseFloat(cv.replace(',','.').replace(/[^\d.\-]/g,''));
+        if(typeof cv === 'number' && !isNaN(cv)) carton = cv;
+      }
+      let brand;
+      if(sheet.brandCol === -2){
+        brand = deriveBrandFromName(name);
+      } else if(sheet.brandCol >= 0){
+        brand = currentBrand || deriveBrandFromName(name);
+      } else {
+        brand = '';
+      }
+      products.push({ean, name, price, pallet, carton, brand, sheet:sn});
+    }
+  });
+  return {products, dupCount};
+}
+
+document.getElementById('btn-compare').addEventListener('click', ()=>{
+  const A = extractProducts(state.a);
+  const B = extractProducts(state.b);
+  const bByEan = new Map(B.products.map(p=>[p.ean,p]));
+  const usedB = new Set();
+
+  const matched = [];
+  const onlyA = [];
+  A.products.forEach(pa=>{
+    const pb = bByEan.get(pa.ean);
+    if(pb){
+      usedB.add(pa.ean);
+      const cheaper = pa.price <= pb.price ? 'A' : 'B';
+      matched.push({
+        ean: pa.ean,
+        name: pa.name,
+        priceA: pa.price,
+        priceB: pb.price,
+        palletA: pa.pallet,
+        palletB: pb.pallet,
+        cartonA: pa.carton,
+        cartonB: pb.carton,
+        brand: pa.brand || pb.brand || '',
+        cheaper,
+        diff: Math.abs(pa.price - pb.price)
+      });
+    } else {
+      onlyA.push(pa);
+    }
+  });
+  const onlyB = B.products.filter(p=>!usedB.has(p.ean));
+
+  state.results = { matched, onlyA, onlyB, totalA:A.products.length, totalB:B.products.length, dupA:A.dupCount, dupB:B.dupCount };
+  state.orders = new Map();
+  state.sort = { key:null, dir:'asc' };
+  renderResults();
+});
+
+function fmtPrice(v){
+  return v.toLocaleString('cs-CZ', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+const SORT_COLUMNS = [
+  {key:'ean', label:'EAN', type:'string', thClass:'ean'},
+  {key:'name', label:'Název produktu', type:'string'},
+  {key:'priceA', label:()=>`Cena ${escapeHtml(state.a.name)}`, type:'number', align:'right'},
+  {key:'priceB', label:()=>`Cena ${escapeHtml(state.b.name)}`, type:'number', align:'right'},
+  {key:null, label:'Objednat u', sortable:false},
+  {key:'diff', label:'Rozdíl', type:'number', align:'right'},
+  {key:'carton', label:'Ks/karton', type:'number', align:'right'},
+  {key:'pallet', label:'Ks/paleta', type:'number', align:'right'},
+  {key:'qty', label:'Množství objednávky', type:'number', align:'right'},
+];
+
+function renderResults(){
+  const res = state.results;
+  document.getElementById('results-section').classList.remove('hidden');
+
+  const totalSavings = res.matched.reduce((sum,m)=>sum+m.diff,0);
+  const grid = document.getElementById('summary-grid');
+  grid.innerHTML = `
+    <div class="stat good"><div class="num">${res.matched.length}</div><div class="lbl">Spárováno podle EAN</div></div>
+    <div class="stat"><div class="num">${res.onlyA.length}</div><div class="lbl">Jen u ${escapeHtml(state.a.name)}</div></div>
+    <div class="stat"><div class="num">${res.onlyB.length}</div><div class="lbl">Jen u ${escapeHtml(state.b.name)}</div></div>
+    <div class="stat"><div class="num">${fmtPrice(totalSavings)}</div><div class="lbl">Součet rozdílů (Kč) při volbě levnějšího</div></div>
+  `;
+
+  renderThead();
+
+  const brandSet = new Set();
+  res.matched.forEach(m=>{ if(m.brand) brandSet.add(m.brand); });
+  res.onlyA.forEach(p=>{ if(p.brand) brandSet.add(p.brand); });
+  res.onlyB.forEach(p=>{ if(p.brand) brandSet.add(p.brand); });
+  const brandSelect = document.getElementById('brand-select');
+  const prevBrand = brandSelect.value;
+  const sortedBrands = Array.from(brandSet).sort((a,b)=>a.localeCompare(b,'cs'));
+  brandSelect.innerHTML = `<option value="all">Všechny značky (${sortedBrands.length})</option>` +
+    sortedBrands.map(b=>`<option value="${escapeHtml(b)}">${escapeHtml(b)}</option>`).join('');
+  if(sortedBrands.includes(prevBrand)) brandSelect.value = prevBrand;
+
+  renderTable();
+}
+
+function renderThead(){
+  const thead = document.getElementById('thead-row');
+  thead.innerHTML = SORT_COLUMNS.map(col=>{
+    const label = typeof col.label === 'function' ? col.label() : col.label;
+    const alignStyle = col.align === 'right' ? ' style="text-align:right"' : '';
+    const cls = col.thClass ? ` class="${col.thClass}"` : '';
+    if(col.sortable === false){
+      return `<th${cls}${alignStyle}>${label}</th>`;
+    }
+    let arrow = '';
+    if(state.sort.key === col.key){
+      arrow = ` <span class="sort-arrow">${state.sort.dir === 'asc' ? '▲' : '▼'}</span>`;
+    }
+    return `<th${cls}${alignStyle} class="sortable-th${cls?' '+col.thClass:''}" data-sort-key="${col.key}">${label}${arrow}</th>`;
+  }).join('');
+}
+
+document.getElementById('thead-row').addEventListener('click', e=>{
+  const th = e.target.closest('th[data-sort-key]');
+  if(!th) return;
+  const key = th.getAttribute('data-sort-key');
+  if(state.sort.key === key){
+    state.sort.dir = state.sort.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    state.sort.key = key;
+    state.sort.dir = 'asc';
+  }
+  renderThead();
+  renderTable();
+});
+
+function getOrder(ean, defaultSupplier){
+  if(!state.orders.has(ean)){
+    state.orders.set(ean, { qty:null, supplier: defaultSupplier });
+  }
+  return state.orders.get(ean);
+}
+
+function fmtPallet(v){
+  return (v===null || v===undefined || isNaN(v)) ? '—' : v.toLocaleString('cs-CZ');
+}
+
+function buildRowDescriptors(res, filter){
+  const rows = [];
+  if(filter === 'all' || filter === 'matched'){
+    res.matched.forEach(m=>{
+      const order = getOrder(m.ean, m.cheaper);
+      rows.push({
+        rowType:'matched', ean:m.ean, name:m.name, brand:m.brand,
+        priceA:m.priceA, priceB:m.priceB, diff:m.diff,
+        carton: order.supplier==='A' ? m.cartonA : m.cartonB,
+        pallet: order.supplier==='A' ? m.palletA : m.palletB,
+        qty: order.qty, ref:m, order
+      });
+    });
+  }
+  if(filter === 'all' || filter === 'onlyA'){
+    res.onlyA.forEach(p=>{
+      const order = getOrder(p.ean, 'A');
+      rows.push({
+        rowType:'onlyA', ean:p.ean, name:p.name, brand:p.brand,
+        priceA:p.price, priceB:null, diff:null,
+        carton:p.carton, pallet:p.pallet, qty:order.qty, ref:p, order
+      });
+    });
+  }
+  if(filter === 'all' || filter === 'onlyB'){
+    res.onlyB.forEach(p=>{
+      const order = getOrder(p.ean, 'B');
+      rows.push({
+        rowType:'onlyB', ean:p.ean, name:p.name, brand:p.brand,
+        priceA:null, priceB:p.price, diff:null,
+        carton:p.carton, pallet:p.pallet, qty:order.qty, ref:p, order
+      });
+    });
+  }
+  return rows;
+}
+
+function compareRows(a, b, key, dir){
+  let va = a[key], vb = b[key];
+  const aEmpty = (va===null||va===undefined||va==='');
+  const bEmpty = (vb===null||vb===undefined||vb==='');
+  if(aEmpty && bEmpty) return 0;
+  if(aEmpty) return 1;  // rows without a value always sink to the bottom
+  if(bEmpty) return -1;
+  let cmp;
+  if(typeof va === 'string' || typeof vb === 'string'){
+    cmp = String(va).localeCompare(String(vb), 'cs', {numeric:true, sensitivity:'base'});
+  } else {
+    cmp = va - vb;
+  }
+  return dir === 'asc' ? cmp : -cmp;
+}
+
+function renderRowHtml(row){
+  const m = row.ref, order = row.order;
+  if(row.rowType === 'matched'){
+    return `<tr>
+      <td class="ean">${m.ean}</td>
+      <td>${escapeHtml(m.name)}</td>
+      <td class="price ${m.cheaper==='A' ? 'price-cell best':''}">${fmtPrice(m.priceA)}</td>
+      <td class="price ${m.cheaper==='B' ? 'price-cell best':''}">${fmtPrice(m.priceB)}</td>
+      <td>
+        <select class="supplier-select" data-supplier-select="${m.ean}">
+          <option value="A" ${order.supplier==='A'?'selected':''}>${escapeHtml(state.a.name)} (${fmtPrice(m.priceA)})</option>
+          <option value="B" ${order.supplier==='B'?'selected':''}>${escapeHtml(state.b.name)} (${fmtPrice(m.priceB)})</option>
+        </select>
+      </td>
+      <td class="price">${fmtPrice(m.diff)}</td>
+      <td class="pallet-col">${fmtPallet(row.carton)}</td>
+      <td class="pallet-col">${fmtPallet(row.pallet)}</td>
+      <td class="qty-cell"><input type="number" min="0" step="1" data-qty="${m.ean}" value="${order.qty ?? ''}" placeholder="0"></td>
+    </tr>`;
+  }
+  const isA = row.rowType === 'onlyA';
+  const supplierName = isA ? state.a.name : state.b.name;
+  return `<tr>
+    <td class="ean">${m.ean}</td>
+    <td>${escapeHtml(m.name)}</td>
+    <td class="price">${isA ? fmtPrice(m.price) : '—'}</td>
+    <td class="price">${isA ? '—' : fmtPrice(m.price)}</td>
+    <td><span class="tag only">jen ${escapeHtml(supplierName)}</span></td>
+    <td class="price">—</td>
+    <td class="pallet-col">${fmtPallet(m.carton)}</td>
+    <td class="pallet-col">${fmtPallet(m.pallet)}</td>
+    <td class="qty-cell"><input type="number" min="0" step="1" data-qty="${m.ean}" value="${order.qty ?? ''}" placeholder="0"></td>
+  </tr>`;
+}
+
+function renderTable(){
+  const res = state.results;
+  if(!res) return;
+  const search = document.getElementById('search').value.trim().toLowerCase();
+  const filter = document.getElementById('filter-select').value;
+  const brandFilter = document.getElementById('brand-select').value;
+  const body = document.getElementById('results-body');
+
+  let rows = buildRowDescriptors(res, filter);
+
+  if(search){
+    rows = rows.filter(r => r.name.toLowerCase().includes(search) || r.ean.includes(search));
+  }
+  if(brandFilter !== 'all'){
+    rows = rows.filter(r => r.brand === brandFilter);
+  }
+  if(state.sort.key){
+    rows.sort((a,b)=>compareRows(a,b,state.sort.key,state.sort.dir));
+  }
+
+  body.innerHTML = rows.length
+    ? rows.map(renderRowHtml).join('')
+    : `<tr><td colspan="9"><div class="empty">Žádné položky neodpovídají filtru.</div></td></tr>`;
+  updateOrderSummary();
+}
+
+// Event delegation: quantities & supplier choice persist in state.orders across re-renders
+document.getElementById('results-body').addEventListener('input', e=>{
+  const t = e.target;
+  if(t.matches('input[data-qty]')){
+    const ean = t.getAttribute('data-qty');
+    const order = state.orders.get(ean) || {qty:null, supplier:'A'};
+    const v = t.value === '' ? null : Math.max(0, parseInt(t.value, 10) || 0);
+    order.qty = v;
+    state.orders.set(ean, order);
+    updateOrderSummary();
+  }
+});
+document.getElementById('results-body').addEventListener('change', e=>{
+  const t = e.target;
+  if(t.matches('select[data-supplier-select]')){
+    const ean = t.getAttribute('data-supplier-select');
+    const order = state.orders.get(ean) || {qty:null, supplier:'A'};
+    order.supplier = t.value;
+    state.orders.set(ean, order);
+    renderTable(); // pallet count depends on chosen supplier
+  }
+});
+
+function priceForOrder(ean){
+  const res = state.results;
+  const m = res.matched.find(x=>x.ean===ean);
+  if(m){
+    const order = state.orders.get(ean);
+    return order && order.supplier === 'B' ? m.priceB : m.priceA;
+  }
+  const pa = res.onlyA.find(x=>x.ean===ean);
+  if(pa) return pa.price;
+  const pb = res.onlyB.find(x=>x.ean===ean);
+  if(pb) return pb.price;
+  return null;
+}
+
+function nameForOrder(ean){
+  const res = state.results;
+  const item = res.matched.find(x=>x.ean===ean) || res.onlyA.find(x=>x.ean===ean) || res.onlyB.find(x=>x.ean===ean);
+  return item ? item.name : '';
+}
+
+function supplierNameForOrder(ean){
+  const res = state.results;
+  if(res.matched.find(x=>x.ean===ean)){
+    const order = state.orders.get(ean);
+    return order && order.supplier === 'B' ? state.b.name : state.a.name;
+  }
+  if(res.onlyA.find(x=>x.ean===ean)) return state.a.name;
+  if(res.onlyB.find(x=>x.ean===ean)) return state.b.name;
+  return '';
+}
+
+function palletForOrder(ean){
+  const res = state.results;
+  const m = res.matched.find(x=>x.ean===ean);
+  if(m){
+    const order = state.orders.get(ean);
+    return (order && order.supplier === 'B') ? m.palletB : m.palletA;
+  }
+  const pa = res.onlyA.find(x=>x.ean===ean);
+  if(pa) return pa.pallet;
+  const pb = res.onlyB.find(x=>x.ean===ean);
+  if(pb) return pb.pallet;
+  return null;
+}
+
+function altPriceForOrder(ean){
+  // price at the OTHER supplier for the same EAN, if one exists (only matched products have an alternative)
+  const res = state.results;
+  const m = res.matched.find(x=>x.ean===ean);
+  if(!m) return null;
+  const order = state.orders.get(ean);
+  return (order && order.supplier === 'B') ? m.priceA : m.priceB;
+}
+
+function getOrderLines(){
+  const lines = [];
+  state.orders.forEach((order, ean)=>{
+    if(order.qty && order.qty > 0){
+      const price = priceForOrder(ean);
+      if(price === null) return;
+      const pallet = palletForOrder(ean);
+      const altPrice = altPriceForOrder(ean);
+      lines.push({
+        ean,
+        name: nameForOrder(ean),
+        supplier: supplierNameForOrder(ean),
+        qty: order.qty,
+        price,
+        total: order.qty * price,
+        pallet,
+        altTotal: order.qty * (altPrice !== null ? altPrice : price) // if no alternative exists, treat as equal (no saving/loss)
+      });
+    }
+  });
+  return lines;
+}
+
+function updateOrderSummary(){
+  const lines = getOrderLines();
+  const totalUnits = lines.reduce((s,l)=>s+l.qty,0);
+  const totalValue = lines.reduce((s,l)=>s+l.total,0);
+  const totalAltValue = lines.reduce((s,l)=>s+l.altTotal,0);
+
+  let totalPallets = 0;
+  let missingPallet = 0;
+  lines.forEach(l=>{
+    if(l.pallet && l.pallet > 0){
+      totalPallets += Math.ceil(l.qty / l.pallet);
+    } else {
+      missingPallet++;
+    }
+  });
+
+  const savingsValue = totalAltValue - totalValue; // positive = cheaper than the other supplier
+  const savingsPercent = totalAltValue > 0 ? (savingsValue / totalAltValue * 100) : 0;
+
+  document.getElementById('op-count').textContent = lines.length;
+  document.getElementById('op-units').textContent = totalUnits.toLocaleString('cs-CZ');
+  document.getElementById('op-pallets').textContent = totalPallets.toLocaleString('cs-CZ');
+  document.getElementById('op-value').textContent = fmtPrice(totalValue) + ' Kč';
+
+  const savingsEl = document.getElementById('op-savings');
+  const sign = savingsValue >= 0 ? '−' : '+'; // "−X %" saved, "+X %" more expensive than the alternative
+  savingsEl.textContent = `${sign}${fmtPrice(Math.abs(savingsPercent))} %`;
+  savingsEl.style.color = savingsValue >= 0 ? '' : '#B23A2E';
+
+  const note = document.getElementById('op-note');
+  const notes = [];
+  if(missingPallet > 0) notes.push(`${missingPallet} položek nemá známý počet ks/paleta, do počtu palet se nezapočítávají.`);
+  notes.push(`Úspora je počítána oproti ceně stejného produktu u druhého dodavatele (${escapeHtml(state.a.name)} vs. ${escapeHtml(state.b.name)}); u položek dostupných jen u jednoho dodavatele se srovnání nepočítá.`);
+  note.textContent = notes.join(' ');
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+document.getElementById('search').addEventListener('input', renderTable);
+document.getElementById('filter-select').addEventListener('change', renderTable);
+document.getElementById('brand-select').addEventListener('change', renderTable);
+
+document.getElementById('btn-export').addEventListener('click', ()=>{
+  const res = state.results;
+  if(!res) return;
+  const rows = [['EAN','Název produktu','Dodavatel',`Cena ${state.a.name} (bez DPH)`,`Cena ${state.b.name} (bez DPH)`,'Nejlevnější dodavatel','Rozdíl (Kč)','Ks/karton A','Ks/karton B','Ks/paleta A','Ks/paleta B','Datum ceníku A','Datum ceníku B']];
+  res.matched.forEach(m=>{
+    rows.push([m.ean, m.name, 'spárováno', m.priceA, m.priceB, m.cheaper==='A'?state.a.name:state.b.name, m.diff, m.cartonA ?? '', m.cartonB ?? '', m.palletA ?? '', m.palletB ?? '', state.a.date, state.b.date]);
+  });
+  res.onlyA.forEach(p=>{
+    rows.push([p.ean, p.name, 'jen '+state.a.name, p.price, '', '', '', p.carton ?? '', '', p.pallet ?? '', '', state.a.date, '']);
+  });
+  res.onlyB.forEach(p=>{
+    rows.push([p.ean, p.name, 'jen '+state.b.name, '', p.price, '', '', '', p.carton ?? '', '', p.pallet ?? '', '', state.b.date]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:16},{wch:42},{wch:16},{wch:16},{wch:16},{wch:20},{wch:12},{wch:11},{wch:11},{wch:11},{wch:11},{wch:14},{wch:14}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Porovnání cen');
+  XLSX.writeFile(wb, 'porovnani_cenu_export.xlsx');
+});
+
+document.getElementById('btn-export-order').addEventListener('click', ()=>{
+  const lines = getOrderLines();
+  if(!lines.length){
+    alert('Nejdřív vyplň množství aspoň u jedné položky.');
+    return;
+  }
+  // Fixed layout: A=EAN, B=množství, C=nákupní cena, D=(prázdné), E=dodavatel
+  const rows = [['EAN','Množství objednávky','Nákupní cena (bez DPH)','','Dodavatel']];
+  lines.forEach(l=>{
+    rows.push([l.ean, l.qty, l.price, '', l.supplier]);
+  });
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:16},{wch:20},{wch:20},{wch:4},{wch:24}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Objednávka');
+  const today = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `objednavka_${today}.xlsx`);
+});
+</script>
+</body>
+</html>
