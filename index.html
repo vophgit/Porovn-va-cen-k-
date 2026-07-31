@@ -355,7 +355,7 @@
       <div class="step-head">
         <div>
           <h2 style="font-size:15px;">Import EAN kódů</h2>
-          <p class="step-sub">Nahraj Excel s EANy v prvním sloupci, nebo je vlož ručně — spárujeme je s právě porovnanými ceníky.</p>
+          <p class="step-sub">Nahraj Excel s EANy v 1. sloupci a množstvím ve 2. sloupci, nebo je vlož ručně — spárujeme je s právě porovnanými ceníky.</p>
         </div>
       </div>
 
@@ -363,12 +363,12 @@
         <div id="dz-import" class="dropzone">
           <div class="dz-icon">⇪</div>
           <div class="dz-label">Excel s objednávkou</div>
-          <div class="dz-name" id="dz-import-name">Klikni nebo přetáhni soubor (EAN v 1. sloupci)</div>
+          <div class="dz-name" id="dz-import-name">Klikni nebo přetáhni soubor (A: EAN, B: množství)</div>
           <input type="file" id="file-import" accept=".xlsx,.xls,.csv">
         </div>
         <div class="field-row" style="margin-top:0;">
-          <label>...nebo vlož EANy ručně (jeden na řádek, nebo oddělené čárkou/mezerou)</label>
-          <textarea id="import-textarea" rows="6" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:7px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; resize:vertical;" placeholder="8712561560696&#10;8712561561426&#10;..."></textarea>
+          <label>...nebo vlož ručně (jeden EAN na řádek, volitelně mezerou/čárkou oddělené množství — bez množství se použije 1 ks)</label>
+          <textarea id="import-textarea" rows="6" style="width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:7px; font-family:'IBM Plex Mono',monospace; font-size:12.5px; resize:vertical;" placeholder="8712561560696 5&#10;8712561561426, 2&#10;8720181300424"></textarea>
         </div>
       </div>
 
@@ -454,7 +454,7 @@ const state = {
   orders: new Map(), // ean -> { qty:number, supplierIdx:number }
   sort: { key:null, dir:'asc' },
   drive: { tokenClient:null, accessToken:null, files:[], selected:[] }, // selected: ordered array of fileIds, any length
-  importFileEans: []
+  importFileEntries: []
 };
 
 function normEan(v){
@@ -1320,18 +1320,26 @@ fileImportInput.addEventListener('change', e=>{
   if(e.target.files[0]) handleImportFile(e.target.files[0]);
 });
 
+function parseQty(v){
+  if(v === null || v === undefined || v === '') return 1;
+  let n = v;
+  if(typeof n === 'string') n = parseFloat(n.replace(',','.').replace(/[^\d.\-]/g,''));
+  n = Math.round(n);
+  return (typeof n === 'number' && !isNaN(n) && n > 0) ? n : 1;
+}
+
 function handleImportFile(file){
   document.getElementById('dz-import-name').textContent = file.name;
   dzImport.classList.add('drag');
   const reader = new FileReader();
   reader.onload = function(e){
-    let eans = [];
+    let entries = [];
     if(/\.csv$/i.test(file.name)){
       const text = new TextDecoder('utf-8').decode(e.target.result);
       text.split(/\r?\n/).forEach(line=>{
-        const firstCol = line.split(/[,;\t]/)[0];
-        const ean = normEan(firstCol);
-        if(ean) eans.push(ean);
+        const cols = line.split(/[,;\t]/);
+        const ean = normEan(cols[0]);
+        if(ean) entries.push({ean, qty: parseQty(cols[1])});
       });
     } else {
       const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
@@ -1339,12 +1347,12 @@ function handleImportFile(file){
         const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, raw:true, defval:null});
         rows.forEach(row=>{
           const ean = normEan(row[0]);
-          if(ean) eans.push(ean);
+          if(ean) entries.push({ean, qty: parseQty(row[1])});
         });
       });
     }
-    state.importFileEans = eans;
-    document.getElementById('import-status').textContent = `Ze souboru načteno ${eans.length} EAN kódů. Klikni na "Spárovat s ceníky".`;
+    state.importFileEntries = entries;
+    document.getElementById('import-status').textContent = `Ze souboru načteno ${entries.length} EAN kódů (množství ze 2. sloupce). Klikni na "Spárovat s ceníky".`;
   };
   reader.readAsArrayBuffer(file);
 }
@@ -1361,21 +1369,34 @@ document.getElementById('btn-import-process').addEventListener('click', ()=>{
     document.getElementById('import-status').style.color = '#B23A2E';
     return;
   }
-  const textEans = [];
-  document.getElementById('import-textarea').value.split(/[\s,;]+/).forEach(tok=>{
-    const ean = normEan(tok);
-    if(ean) textEans.push(ean);
+  const textEntries = [];
+  document.getElementById('import-textarea').value.split(/\r?\n/).forEach(line=>{
+    const tokens = line.split(/[,;\s]+/).filter(t=>t.length);
+    if(!tokens.length) return;
+    const ean = normEan(tokens[0]);
+    if(!ean) return;
+    const qty = tokens.length > 1 ? parseQty(tokens[1]) : 1;
+    textEntries.push({ean, qty});
   });
-  const combined = Array.from(new Set([...state.importFileEans, ...textEans]));
-  if(!combined.length){
+
+  const byEan = new Map();
+  [...(state.importFileEntries||[]), ...textEntries].forEach(({ean, qty})=>{
+    if(byEan.has(ean)){
+      byEan.set(ean, byEan.get(ean) + qty); // duplicate EAN in the import list -> quantities add up
+    } else {
+      byEan.set(ean, qty);
+    }
+  });
+
+  if(!byEan.size){
     document.getElementById('import-status').textContent = 'Nenašel jsem žádný EAN — nahraj soubor nebo vlož EANy do textového pole.';
     document.getElementById('import-status').style.color = '#B23A2E';
     return;
   }
 
-  importMatches = combined.map(ean=>{
+  importMatches = Array.from(byEan.entries()).map(([ean, qty])=>{
     const found = findInResults(ean);
-    return { ean, status:found.status, ref:found.ref, qty:1 };
+    return { ean, status:found.status, ref:found.ref, qty };
   });
 
   const foundCount = importMatches.filter(x=>x.status!=='notfound').length;
