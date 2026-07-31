@@ -87,7 +87,19 @@
 
   .upload-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
   @media (max-width:760px){ .upload-grid{grid-template-columns:1fr;} }
-  .mapping-stack{display:grid; grid-template-columns:1fr; gap:16px;}
+  .mapping-stack{display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:14px; align-items:start;}
+  .file-card{font-size:12.5px;}
+  .file-card .field-row-pair{display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px;}
+  .file-card .field-row-pair .field-row{margin-top:0;}
+  .sheet-block{border-top:1px solid var(--line); padding:9px 0;}
+  .sheet-block:first-of-type{border-top:none;}
+  .sheet-block-head{
+    display:flex; align-items:center; gap:6px; font-family:'IBM Plex Mono',monospace; font-size:11px;
+    color:var(--ink-soft); margin-bottom:7px;
+  }
+  .sheet-fields{display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;}
+  .sheet-field label{display:block; font-size:9px; text-transform:uppercase; letter-spacing:0.03em; color:var(--ink-soft); margin-bottom:2px;}
+  .sheet-field select{width:100%; font-size:10.5px; padding:5px 4px;}
 
   #drive-config{
     border:1px solid var(--line); border-radius:8px; padding:2px 16px; background:#FAFBFA; margin-bottom:4px;
@@ -137,7 +149,9 @@
   .dz-icon{font-size:22px; margin-bottom:8px; opacity:0.65;}
 
   .file-card{border:1px solid var(--line); border-radius:8px; padding:14px 16px; background:#FAFBFA;}
-  .file-card .fname{font-weight:600; font-size:13.5px; display:flex; justify-content:space-between; align-items:center;}
+  .file-card .fname{font-weight:600; font-size:12.5px; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+  .file-card .fname > span:first-child{min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .file-card .fname .clear{flex-shrink:0;}
   .file-card .fname .clear{cursor:pointer; color:var(--ink-soft); font-size:12px; font-family:'IBM Plex Mono', monospace;}
   .file-card .fname .clear:hover{color:var(--ink);}
 
@@ -778,33 +792,35 @@ function renderMapping(){
     const key = String(idx);
     const card = document.createElement('div');
     card.className = 'file-card';
-    let html = `<div class="fname"><span>${labelFor(key)} · <span class="mono">${escapeHtml(st.file.name)}</span></span>
+    let html = `<div class="fname"><span title="${escapeHtml(st.file.name)}">${labelFor(key)} · <span class="mono">${escapeHtml(st.file.name)}</span></span>
       <span class="clear" data-clear="${key}">odebrat</span></div>`;
 
-    html += `<div class="field-row"><label>Název dodavatele (zobrazí se v tabulce)</label>
-      <input type="text" data-name-input="${key}" value="${escapeHtml(st.name)}"></div>`;
+    html += `<div class="field-row-pair">
+      <div class="field-row"><label>Název dodavatele</label>
+        <input type="text" data-name-input="${key}" value="${escapeHtml(st.name)}"></div>
+      <div class="field-row"><label>Datum ceníku</label>
+        <input type="text" data-date-input="${key}" placeholder="16.6.2026" value="${st.date}"></div>
+    </div>`;
 
-    html += `<div class="field-row"><label>Datum ceníku (volitelné)</label>
-      <input type="text" data-date-input="${key}" placeholder="např. 16.6.2026" value="${st.date}"></div>`;
-
-    html += `<div class="field-row"><label>Listy a sloupce</label><div style="overflow-x:auto;">`;
-    html += `<div class="sheet-row-6" style="min-width:640px;"><span></span><span class="colhead">EAN</span><span class="colhead">Název</span><span class="colhead">Cena bez DPH</span><span class="colhead">Ks/karton</span><span class="colhead">Ks/paleta</span><span class="colhead">Značka</span></div>`;
+    html += `<div class="field-row"><label>Listy a sloupce</label>`;
     Object.keys(st.sheets).forEach(sn=>{
       const sheet = st.sheets[sn];
       const opts = sheet.header.map((h,i)=>`<option value="${i}">${colLetter(i)}: ${h || '(prázdné)'}</option>`).join('');
       const optsWithNone = `<option value="-1">— nepoužito —</option>` + opts;
-      const optsBrand = `<option value="-2">— podle názvu produktu —</option><option value="-1">— nepoužito —</option>` + opts;
-      html += `<div class="sheet-row-6" style="min-width:640px;">
-        <span class="sname"><input type="checkbox" data-sheet-toggle="${key}|${sn}" ${sheet.included?'checked':''}> ${sn}</span>
-        <select data-col="${key}|${sn}|ean">${opts}</select>
-        <select data-col="${key}|${sn}|name">${opts}</select>
-        <select data-col="${key}|${sn}|price">${opts}</select>
-        <select data-col="${key}|${sn}|carton">${optsWithNone}</select>
-        <select data-col="${key}|${sn}|pallet">${optsWithNone}</select>
-        <select data-col="${key}|${sn}|brand">${optsBrand}</select>
+      const optsBrand = `<option value="-2">— podle názvu —</option><option value="-1">— nepoužito —</option>` + opts;
+      html += `<div class="sheet-block">
+        <div class="sheet-block-head"><input type="checkbox" data-sheet-toggle="${key}|${sn}" ${sheet.included?'checked':''}> ${escapeHtml(sn)}</div>
+        <div class="sheet-fields">
+          <div class="sheet-field"><label>EAN</label><select data-col="${key}|${sn}|ean">${opts}</select></div>
+          <div class="sheet-field"><label>Název</label><select data-col="${key}|${sn}|name">${opts}</select></div>
+          <div class="sheet-field"><label>Cena bez DPH</label><select data-col="${key}|${sn}|price">${opts}</select></div>
+          <div class="sheet-field"><label>Ks/karton</label><select data-col="${key}|${sn}|carton">${optsWithNone}</select></div>
+          <div class="sheet-field"><label>Ks/paleta</label><select data-col="${key}|${sn}|pallet">${optsWithNone}</select></div>
+          <div class="sheet-field"><label>Značka</label><select data-col="${key}|${sn}|brand">${optsBrand}</select></div>
+        </div>
       </div>`;
     });
-    html += `</div></div>`;
+    html += `</div>`;
     card.innerHTML = html;
     grid.appendChild(card);
   });
